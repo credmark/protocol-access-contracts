@@ -3,6 +3,7 @@ pragma solidity ^0.8.2;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -120,8 +121,8 @@ contract CredmarkAccessKey is ICredmarkAccessKey, ERC721, ERC721Enumerable, Owna
 
     function addCmk(uint256 tokenId, uint256 cmkAmount) public override {
         require(_exists(tokenId), "No such token");
-        credmark.approve(address(stakedCredmark), cmkAmount);
-        credmark.transferFrom(msg.sender, address(this), cmkAmount);
+        SafeERC20.safeApprove(credmark, address(stakedCredmark), cmkAmount);
+        SafeERC20.safeTransferFrom(credmark, msg.sender, address(this), cmkAmount);
         uint256 xCmk = stakedCredmark.createShare(cmkAmount);
         _sharesLocked[tokenId] += xCmk;
 
@@ -139,7 +140,7 @@ contract CredmarkAccessKey is ICredmarkAccessKey, ERC721, ERC721Enumerable, Owna
 
         uint256 liquidatorReward = (_cmkValue * liquidatorRewardBp) / 10000;
         if (liquidatorReward > 0) {
-            credmark.transfer(msg.sender, liquidatorReward);
+            SafeERC20.safeTransfer(credmark, msg.sender, liquidatorReward);
         }
         emit AccessKeyLiquidated(tokenId, msg.sender, liquidatorReward);
     }
@@ -147,12 +148,12 @@ contract CredmarkAccessKey is ICredmarkAccessKey, ERC721, ERC721Enumerable, Owna
     function sweep() external override {
         uint256 cmkToSCmk = (credmark.balanceOf(address(this)) * stakedCmkSweepShareBp) / 10000;
         if (cmkToSCmk > 0) {
-            credmark.transfer(address(stakedCredmark), cmkToSCmk);
+            SafeERC20.safeTransfer(credmark, address(stakedCredmark), cmkToSCmk);
         }
 
         uint256 cmkToDao = credmark.balanceOf(address(this));
         if (cmkToDao > 0) {
-            credmark.transfer(credmarkDAO, cmkToDao);
+            SafeERC20.safeTransfer(credmark, credmarkDAO, cmkToDao);
         }
 
         emit Sweeped(cmkToSCmk, cmkToDao);
@@ -168,7 +169,7 @@ contract CredmarkAccessKey is ICredmarkAccessKey, ERC721, ERC721Enumerable, Owna
         stakedCredmark.removeShare(_sharesLocked[tokenId]);
         uint256 returned = cmkValue(tokenId) - fee;
         if (returned > 0) {
-            credmark.transfer(ownerOf(tokenId), returned);
+            SafeERC20.safeTransfer(credmark, ownerOf(tokenId), returned);
         }
 
         _sharesLocked[tokenId] = 0;
