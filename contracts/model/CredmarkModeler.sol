@@ -2,31 +2,45 @@
 pragma solidity ^0.8.2;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "./CredmarkModel.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
+contract CredmarkModeler is ERC721, Pausable, AccessControl {
     using Counters for Counters.Counter;
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    
     Counters.Counter private _tokenIdCounter;
 
-    mapping(uint => uint) public slugHashes;
-    mapping(uint => uint) private slugTokens;
+    CredmarkModel private _modelContract;
+    
+    ERC20 private _mintToken;
+    uint private _mintCost;
 
     constructor() ERC721("CredmarkModel", "CMKm") {
-
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
-        
+    }
+
+    function setModelContract(CredmarkModel modelContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _modelContract = modelContract;
+    }
+
+    function setMintToken(ERC20 mintToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _mintToken = mintToken;
+    }
+
+    function setMintCost(uint mintCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _mintCost = mintCost;
     }
 
     function _baseURI() internal pure override returns (string memory) {
-        return "https://api.credmark.com/v1/meta/model/";
+        return "https://api.credmark.com/v1/meta/modelers/";
     }
 
     function pause() public onlyRole(PAUSER_ROLE) {
@@ -37,14 +51,10 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
         _unpause();
     }
 
-    function safeMint(address to, string memory _slug) public onlyRole(MINTER_ROLE) {
-        uint slugHash = getSlugHash(_slug);
-        require(slugTokens[slugHash] == 0x0, "Slug already Exists");
-
+    function safeMint(address to) public onlyRole(MINTER_ROLE) {
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
-        slugHashes[tokenId] = slugHash;
-        slugTokens[slugHash] = tokenId;
+        _mintToken.transferFrom(_msgSender(), address(this),  _mintCost);
         _safeMint(to, tokenId);
     }
 
@@ -57,15 +67,17 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
     function _beforeTokenTransfer(address from, address to, uint256 tokenId)
         internal
         whenNotPaused
-        override(ERC721, ERC721Enumerable)
+        override
     {
         super._beforeTokenTransfer(from, to, tokenId);
     }
 
+    // The following functions are overrides required by Solidity.
+
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, ERC721Enumerable, AccessControl)
+        override(ERC721, AccessControl)
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
