@@ -13,13 +13,13 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    
+
     Counters.Counter private _tokenIdCounter;
 
     CredmarkModel private _modelContract;
-    
+
     ERC20 private _mintToken;
-    uint private _mintCost;
+    uint256 private _mintCost;
 
     constructor() ERC721("CredmarkModel", "CMKm") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -35,7 +35,7 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
         _mintToken = mintToken;
     }
 
-    function setMintCost(uint mintCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMintCost(uint256 mintCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _mintCost = mintCost;
     }
 
@@ -54,32 +54,25 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
     function safeMint(address to) public onlyRole(MINTER_ROLE) {
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
-        _mintToken.transferFrom(_msgSender(), address(this),  _mintCost);
+        _mintToken.transferFrom(_msgSender(), address(this), _mintCost);
         _safeMint(to, tokenId);
     }
 
-    function getSlugHash(string memory _slug) 
-        public pure returns (uint) 
-    {
-        return uint(keccak256(abi.encodePacked(_slug)));    
+    function getSlugHash(string memory _slug) public pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(_slug)));
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId)
-        internal
-        whenNotPaused
-        override
-    {
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal override whenNotPaused {
         super._beforeTokenTransfer(from, to, tokenId);
     }
 
     // The following functions are overrides required by Solidity.
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(ERC721, AccessControl)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721, AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }

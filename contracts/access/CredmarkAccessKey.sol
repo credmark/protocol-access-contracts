@@ -11,30 +11,38 @@ import "../interfaces/IStakedCredmark.sol";
 
 contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     using Counters for Counters.Counter;
+
     bytes32 public constant TIER_MANAGER = keccak256("TIER_MANAGER");
 
-    IERC20 private constant CMK = IERC20(address(0x00));
-    IStakedCredmark private constant XCMK = IStakedCredmark(address(0x00));
-    address private constant CREDMARK_DAO_TREASURY = address(0x000);
+    IERC20 private cmk;
+    IStakedCredmark private xcmk;
+    address private credmarkDaoTreasury;
 
     Counters.Counter private _tokenIdCounter;
 
-    CredmarkAccessKeySubscriptionTier[] supportedTiers;
+    CredmarkAccessKeySubscriptionTier[] public supportedTiers;
 
-    mapping(uint256 => address) tokenSubscription;
-    mapping(uint256 => uint256) tokenDebtDiscount;
+    mapping(uint256 => address) public tokenSubscription;
+    mapping(uint256 => uint256) public tokenDebtDiscount;
 
     CredmarkPriceOracleUsd public credmarkPriceOracle;
 
     mapping(uint256 => uint256) xCmkAmount;
 
-    constructor() ERC721("CredmarkAccessKey", "CMKkey") {
+    constructor(
+        address _cmk,
+        address _xcmk,
+        address _credmarkDaoTreasury
+    ) ERC721("CredmarkAccessKey", "cmkkey") {
+        cmk = IERC20(_cmk);
+        xcmk = IStakedCredmark(_xcmk);
+        credmarkDaoTreasury = _credmarkDaoTreasury;
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(TIER_MANAGER, msg.sender);
     }
 
-    function safeMint(address to) public returns (uint256) {
-        uint256 tokenId = _tokenIdCounter.current();
+    function safeMint(address to) public returns (uint256 tokenId) {
+        tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
         _safeMint(to, tokenId);
     }
@@ -50,19 +58,19 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     }
 
     function liquidate(uint256 tokenId) external {
-        require(debt(tokenId) > XCMK.sharesToCmk(xCmkAmount[tokenId]), "Access Key is Solvent");
-        XCMK.removeShare(xCmkAmount[tokenId]);
-        CMK.transfer(CREDMARK_DAO_TREASURY, CMK.balanceOf(address(this)));
+        require(debt(tokenId) > xcmk.sharesToCmk(xCmkAmount[tokenId]), "Access Key is Solvent");
+        xcmk.removeShare(xCmkAmount[tokenId]);
+        cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
     }
 
     function fund(uint256 tokenId, uint256 amount) public {
-        CMK.transferFrom(msg.sender, address(this), amount);
-        CMK.approve(address(XCMK), amount);
-        xCmkAmount[tokenId] += XCMK.createShare(amount);
+        cmk.transferFrom(msg.sender, address(this), amount);
+        cmk.approve(address(xcmk), amount);
+        xCmkAmount[tokenId] += xcmk.createShare(amount);
     }
 
     function subscribe(uint256 tokenId, address subscription) public {
-        require(_isApprovedOrOwner(msg.sender, tokenId) || hasRole(TIER_MANAGER, msg.sender));
+        require(_isApprovedOrOwner(msg.sender, tokenId) || hasRole(TIER_MANAGER, msg.sender), "Approval required");
         require(
             CredmarkAccessKeySubscriptionTier(subscription).locked() == false || hasRole(TIER_MANAGER, msg.sender),
             "Tier is Locked"
@@ -86,15 +94,16 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         if (tokenSubscription[tokenId] == address(0)) {
             return 0;
         }
+
         return
             CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).getGlobalDebt() - tokenDebtDiscount[tokenId];
     }
 
     function resolveDebt(uint256 tokenId) public {
         uint256 _debt = debt(tokenId);
-        uint256 xCmkAmountTransfered = XCMK.cmkToShares(_debt);
-        XCMK.removeShare(xCmkAmountTransfered);
-        CMK.transfer(CREDMARK_DAO_TREASURY, _debt);
+        uint256 xCmkAmountTransfered = xcmk.cmkToShares(_debt);
+        xcmk.removeShare(xCmkAmountTransfered);
+        cmk.transfer(credmarkDaoTreasury, _debt);
     }
 
     function _beforeTokenTransfer(

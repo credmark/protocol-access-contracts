@@ -14,15 +14,13 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     Counters.Counter private _tokenIdCounter;
 
-    mapping(uint => uint) public slugHashes;
-    mapping(uint => uint) private slugTokens;
+    mapping(uint256 => uint256) public slugHashes;
+    mapping(uint256 => uint256) private slugTokens;
 
     constructor() ERC721("CredmarkModel", "CMKm") {
-
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
-        
     }
 
     function _baseURI() internal pure override returns (string memory) {
@@ -38,7 +36,7 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
     }
 
     function safeMint(address to, string memory _slug) public onlyRole(MINTER_ROLE) {
-        uint slugHash = getSlugHash(_slug);
+        uint256 slugHash = getSlugHash(_slug);
         require(slugTokens[slugHash] == 0x0, "Slug already Exists");
 
         uint256 tokenId = _tokenIdCounter.current();
@@ -48,17 +46,15 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
         _safeMint(to, tokenId);
     }
 
-    function getSlugHash(string memory _slug) 
-        public pure returns (uint) 
-    {
-        return uint(keccak256(abi.encodePacked(_slug)));    
+    function getSlugHash(string memory _slug) public pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(_slug)));
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId)
-        internal
-        whenNotPaused
-        override(ERC721, ERC721Enumerable)
-    {
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal override(ERC721, ERC721Enumerable) whenNotPaused {
         super._beforeTokenTransfer(from, to, tokenId);
     }
 

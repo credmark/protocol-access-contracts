@@ -5,14 +5,14 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract CredmarkPriceOracleUsd is AccessControl {
     bytes32 public constant ORACLE_MANAGER = keccak256("ORACLE_MANAGER");
-    
-    uint public cmkPrice;
+
+    uint256 public cmkPrice;
 
     constructor() {
         _setupRole(ORACLE_MANAGER, address(0x0));
     }
 
-    function updateOracle(uint _cmkPrice) external onlyRole(ORACLE_MANAGER) {
+    function updateOracle(uint256 _cmkPrice) external onlyRole(ORACLE_MANAGER) {
         cmkPrice = _cmkPrice;
     }
 }
