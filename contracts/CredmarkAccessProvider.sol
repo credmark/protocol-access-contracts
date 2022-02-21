@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
 
-import "./CredmarkAccessKey.sol";
+import "./access/CredmarkAccessKey.sol";
 
 contract CredmarkAccessProvider {
     CredmarkAccessKey public dataAccess;
@@ -10,9 +10,9 @@ contract CredmarkAccessProvider {
         dataAccess = _dataAccess;
     }
 
-    function authorize(address authenticatedAddress, uint256 tokenId) external view returns (bool authorized) {
-        authorized =
-            authenticatedAddress == dataAccess.ownerOf(tokenId) &&
-            (dataAccess.feesAccumulated(tokenId) < dataAccess.cmkValue(tokenId));
-    }
+    // function authorize(address authenticatedAddress, uint256 tokenId) external view returns (bool authorized) {
+    //     authorized =
+    //         authenticatedAddress == dataAccess.ownerOf(tokenId) &&
+    //         (dataAccess.feesAccumulated(tokenId) < dataAccess.cmkValue(tokenId));
+    // }
 }
