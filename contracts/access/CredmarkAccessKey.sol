@@ -6,8 +6,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "../CredmarkPriceOracleUsd.sol";
 import "../interfaces/IStakedCredmark.sol";
+import "../interfaces/IPriceOracle.sol";
 
 contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     using Counters for Counters.Counter;
@@ -21,13 +21,14 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     Counters.Counter private _tokenIdCounter;
 
     CredmarkAccessKeySubscriptionTier[] public supportedTiers;
+    mapping(address => bool) public supportedTierAddresses;
 
     mapping(uint256 => address) public tokenSubscription;
     mapping(uint256 => uint256) public tokenDebtDiscount;
 
-    CredmarkPriceOracleUsd public credmarkPriceOracle;
+    mapping(uint256 => uint256) public xCmkAmount;
 
-    mapping(uint256 => uint256) xCmkAmount;
+    event SubscriptionTierCreated(address subscriptionTierAddress);
 
     constructor(
         address _cmk,
@@ -37,6 +38,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         cmk = IERC20(_cmk);
         xcmk = IStakedCredmark(_xcmk);
         credmarkDaoTreasury = _credmarkDaoTreasury;
+
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(TIER_MANAGER, msg.sender);
     }
@@ -47,18 +49,35 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         _safeMint(to, tokenId);
     }
 
-    function createSubscriptionTier(uint256 monthlyFee, bool locked) public onlyRole(TIER_MANAGER) {
+    function createSubscriptionTier(
+        address oracle,
+        uint256 monthlyFee,
+        bool locked
+    ) public onlyRole(TIER_MANAGER) returns (address tierAddress) {
         CredmarkAccessKeySubscriptionTier newTier = new CredmarkAccessKeySubscriptionTier();
+        newTier.setPriceOracle(oracle);
         newTier.setMonthlyFeeUsd(monthlyFee);
-        newTier.setPriceOracle(credmarkPriceOracle);
-        if (!locked) {
-            newTier.lockTier(false);
+        if (locked) {
+            newTier.lockTier(true);
         }
+
+        tierAddress = address(newTier);
+
         supportedTiers.push(newTier);
+        supportedTierAddresses[tierAddress] = true;
+
+        emit SubscriptionTierCreated(tierAddress);
+    }
+
+    function totalSupportedTiers() external view returns (uint256) {
+        return supportedTiers.length;
     }
 
     function liquidate(uint256 tokenId) external {
         require(debt(tokenId) > xcmk.sharesToCmk(xCmkAmount[tokenId]), "Access Key is Solvent");
+        // tokenDebtDiscount[tokenId] += debt(tokenId);
+        // xCmkAmount[tokenId] = 0;
+
         xcmk.removeShare(xCmkAmount[tokenId]);
         cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
     }
@@ -75,6 +94,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
             CredmarkAccessKeySubscriptionTier(subscription).locked() == false || hasRole(TIER_MANAGER, msg.sender),
             "Tier is Locked"
         );
+        require(supportedTierAddresses[subscription] == true, "Unsupported subscription");
 
         if (tokenSubscription[tokenId] != address(0x00)) {
             resolveDebt(tokenId);
@@ -101,7 +121,11 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
 
     function resolveDebt(uint256 tokenId) public {
         uint256 _debt = debt(tokenId);
+        tokenDebtDiscount[tokenId] += _debt;
+
         uint256 xCmkAmountTransfered = xcmk.cmkToShares(_debt);
+        xCmkAmount[tokenId] -= xCmkAmountTransfered;
+
         xcmk.removeShare(xCmkAmountTransfered);
         cmk.transfer(credmarkDaoTreasury, _debt);
     }
@@ -134,10 +158,11 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
     uint256 public lastGlobalDebtTimestamp;
     bool public locked;
 
-    CredmarkPriceOracleUsd private oracle;
+    IPriceOracle private oracle;
 
     constructor() {
-        _setupRole(TIER_MANAGER, address(0x0));
+        _setupRole(TIER_MANAGER, msg.sender);
+        _setupRole(TIER_MANAGER, address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266));
         lastGlobalDebtTimestamp = block.timestamp;
     }
 
@@ -150,13 +175,19 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         updateGlobalDebtPerSecond();
     }
 
-    function setPriceOracle(CredmarkPriceOracleUsd _oracle) public onlyRole(TIER_MANAGER) {
-        oracle = _oracle;
+    function setPriceOracle(address _oracle) external onlyRole(TIER_MANAGER) {
+        oracle = IPriceOracle(_oracle);
     }
 
     function updateGlobalDebtPerSecond() public {
+        require(address(oracle) != address(0), "Oracle not set");
+
         lastGlobalDebt = getGlobalDebt();
-        debtPerSecond = monthlyFeeUsdWei / oracle.cmkPrice() / SECONDS_PER_MONTH;
+        uint256 cmkPrice = oracle.getPrice();
+        uint256 cmkPriceDecimals = oracle.decimals();
+        require(cmkPrice != 0, "CMK price is reported 0");
+
+        debtPerSecond = (monthlyFeeUsdWei * 10**cmkPriceDecimals) / (cmkPrice * SECONDS_PER_MONTH);
         lastGlobalDebtTimestamp = block.timestamp;
     }
 
