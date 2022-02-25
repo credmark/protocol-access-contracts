@@ -88,6 +88,25 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         xCmkAmount[tokenId] += xcmk.createShare(amount);
     }
 
+    function burn(uint256 tokenId) public {
+        require(_isApprovedOrOwner(msg.sender, tokenId), "Approval required");
+
+        uint256 _debt = debt(tokenId);
+        uint256 cmkAmount = xcmk.sharesToCmk(xCmkAmount[tokenId]);
+
+        require(_debt <= cmkAmount, "Access Key is not solvent");
+
+        xcmk.removeShare(xCmkAmount[tokenId]);
+
+        delete xCmkAmount[tokenId];
+        delete tokenDebtDiscount[tokenId];
+
+        cmk.transfer(credmarkDaoTreasury, _debt);
+        cmk.transfer(ownerOf(tokenId), cmkAmount - _debt);
+
+        _burn(tokenId);
+    }
+
     function subscribe(uint256 tokenId, address subscription) public {
         require(_isApprovedOrOwner(msg.sender, tokenId) || hasRole(TIER_MANAGER, msg.sender), "Approval required");
         require(

@@ -364,4 +364,135 @@ describe('Credmark Access Key', () => {
       1
     );
   });
+
+  it('should burn', async () => {
+    const tokenId = BigNumber.from(0);
+    const cmkPrice = BigNumber.from(2500); // $0.25
+    const fundAmount = BigNumber.from(1000).mul(BigNumber.from(10).pow(18)); // 1000 CMK ~= $400
+
+    await cmk.connect(admin).transfer(wallet.address, fundAmount);
+
+    await cmk.approve(credmarkAccessKey.address, fundAmount);
+
+    const oracleFactory = await ethers.getContractFactory(
+      'CredmarkPriceOracleUsd'
+    );
+    const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+    await oracle.updateOracle(cmkPrice); // $0.25
+
+    await credmarkAccessKey
+      .connect(admin)
+      .createSubscriptionTier(
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        false
+      );
+
+    const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
+
+    // Token ID 0
+    await credmarkAccessKey.mintFundAndSubscribe(
+      fundAmount,
+      subscriptionTierAddress
+    );
+
+    const sevenDays = 7 * 24 * 60 * 60;
+
+    await ethers.provider.send('evm_increaseTime', [sevenDays]);
+    await ethers.provider.send('evm_mine', []);
+
+    // 100$ for 30 days, so for 7 days,
+    // debt = 100$ * (7 days / 30 days) / (0.25 cmk per $) ~= 93 CMK
+    expect(
+      (await credmarkAccessKey.debt(tokenId)).div(BigNumber.from(10).pow(18))
+    ).to.equal(BigNumber.from(93));
+
+    expect((await cmk.balanceOf(credmarkDao.address)).div(BigNumber.from(10).pow(18))).to.equal(0);
+    expect((await cmk.balanceOf(wallet.address)).div(BigNumber.from(10).pow(18))).to.equal(0);
+
+    await credmarkAccessKey.burn(tokenId);
+    
+    expect((await credmarkAccessKey.xCmkAmount(tokenId)).div(BigNumber.from(10).pow(18))).to.equal(0);
+    
+    expect((await cmk.balanceOf(credmarkDao.address)).div(BigNumber.from(10).pow(18))).to.equal(93);
+    expect((await cmk.balanceOf(wallet.address)).div(BigNumber.from(10).pow(18))).to.equal(906);
+    await expect(credmarkAccessKey.tokenOfOwnerByIndex(wallet.address, tokenId)).to.be.reverted;
+  });
+
+  it('should not burn for non-owner', async () => {
+    const tokenId = BigNumber.from(0);
+    const cmkPrice = BigNumber.from(2500); // $0.25
+    const fundAmount = BigNumber.from(1000).mul(BigNumber.from(10).pow(18)); // 1000 CMK ~= $400
+
+    await cmk.connect(admin).transfer(wallet.address, fundAmount);
+
+    await cmk.approve(credmarkAccessKey.address, fundAmount);
+
+    const oracleFactory = await ethers.getContractFactory(
+      'CredmarkPriceOracleUsd'
+    );
+    const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+    await oracle.updateOracle(cmkPrice); // $0.25
+
+    await credmarkAccessKey
+      .connect(admin)
+      .createSubscriptionTier(
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        false
+      );
+
+    const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
+
+    await credmarkAccessKey.mintFundAndSubscribe(
+      fundAmount,
+      subscriptionTierAddress
+    );
+
+    await expect(credmarkAccessKey.connect(otherWallet).burn(tokenId)).to.be.revertedWith('Approval required');
+  });
+
+  it('should not burn when debt exceeds balance', async () => {
+    const tokenId = BigNumber.from(0);
+    const cmkPrice = BigNumber.from(2500); // $0.25
+    const fundAmount = BigNumber.from(10).mul(BigNumber.from(10).pow(18)); // 10 CMK ~= $4
+
+    await cmk.connect(admin).transfer(wallet.address, fundAmount);
+
+    await cmk.approve(credmarkAccessKey.address, fundAmount);
+
+    const oracleFactory = await ethers.getContractFactory(
+      'CredmarkPriceOracleUsd'
+    );
+    const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+    await oracle.updateOracle(cmkPrice); // $0.25
+
+    await credmarkAccessKey
+      .connect(admin)
+      .createSubscriptionTier(
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        false
+      );
+
+    const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
+
+    await credmarkAccessKey.mintFundAndSubscribe(
+      fundAmount,
+      subscriptionTierAddress
+    );
+
+    const sevenDays = 7 * 24 * 60 * 60;
+
+    await ethers.provider.send('evm_increaseTime', [sevenDays]);
+    await ethers.provider.send('evm_mine', []);
+
+    // 100$ for 30 days, so for 7 days,
+    // debt = 100$ * (7 days / 30 days) / (0.25 cmk per $) ~= 93 CMK
+    expect(
+      (await credmarkAccessKey.debt(tokenId)).div(BigNumber.from(10).pow(18))
+    ).to.equal(BigNumber.from(93));
+
+    await expect(credmarkAccessKey.burn(tokenId)).to.be.revertedWith('Access Key is not solvent');
+  });
 });
