@@ -7,6 +7,8 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
+import "hardhat/console.sol";
+
 contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
     using Counters for Counters.Counter;
 
@@ -37,12 +39,15 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
 
     function safeMint(address to, string memory _slug) public onlyRole(MINTER_ROLE) {
         uint256 slugHash = getSlugHash(_slug);
+        
         require(slugTokens[slugHash] == 0x0, "Slug already Exists");
-
-        uint256 tokenId = _tokenIdCounter.current();
+        
         _tokenIdCounter.increment();
+        uint256 tokenId = _tokenIdCounter.current();
+        
         slugHashes[tokenId] = slugHash;
         slugTokens[slugHash] = tokenId;
+        
         _safeMint(to, tokenId);
     }
 
