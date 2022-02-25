@@ -74,11 +74,14 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     }
 
     function liquidate(uint256 tokenId) external {
-        require(debt(tokenId) > xcmk.sharesToCmk(xCmkAmount[tokenId]), "Access Key is Solvent");
-        // tokenDebtDiscount[tokenId] += debt(tokenId);
-        // xCmkAmount[tokenId] = 0;
+        uint256 _debt = debt(tokenId);
+        uint256 cmkAmount = xcmk.sharesToCmk(xCmkAmount[tokenId]);
+        require(_debt > cmkAmount, "Access Key is solvent");
 
         xcmk.removeShare(xCmkAmount[tokenId]);
+        tokenDebtDiscount[tokenId] += _debt;
+        xCmkAmount[tokenId] = 0;
+
         cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
     }
 
@@ -88,7 +91,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         xCmkAmount[tokenId] += xcmk.createShare(amount);
     }
 
-    function burn(uint256 tokenId) public {
+    function burn(uint256 tokenId) external {
         require(_isApprovedOrOwner(msg.sender, tokenId), "Approval required");
 
         uint256 _debt = debt(tokenId);
@@ -101,8 +104,8 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         delete xCmkAmount[tokenId];
         delete tokenDebtDiscount[tokenId];
 
-        cmk.transfer(credmarkDaoTreasury, _debt);
         cmk.transfer(ownerOf(tokenId), cmkAmount - _debt);
+        cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
 
         _burn(tokenId);
     }
