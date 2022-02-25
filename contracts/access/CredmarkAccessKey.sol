@@ -29,6 +29,10 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     mapping(uint256 => uint256) public xCmkAmount;
 
     event SubscriptionTierCreated(address subscriptionTierAddress);
+    event SubscriptionTierSubscribed(uint256 tokenId, address subscriptionTierAddress);
+    event DebtResolved(uint256 tokenId, uint256 debt);
+    event TokenFunded(uint256 tokenId, uint256 cmkAmount);
+    event TokenLiquidated(uint256 tokenId, uint256 debt);
 
     constructor(
         address _cmk,
@@ -79,16 +83,20 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         require(_debt > cmkAmount, "Access Key is solvent");
 
         xcmk.removeShare(xCmkAmount[tokenId]);
-        tokenDebtDiscount[tokenId] += _debt;
+        tokenDebtDiscount[tokenId] += cmkAmount;
         xCmkAmount[tokenId] = 0;
 
         cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
+
+        emit TokenLiquidated(tokenId, _debt);
     }
 
-    function fund(uint256 tokenId, uint256 amount) public {
-        cmk.transferFrom(msg.sender, address(this), amount);
-        cmk.approve(address(xcmk), amount);
-        xCmkAmount[tokenId] += xcmk.createShare(amount);
+    function fund(uint256 tokenId, uint256 cmkAmount) public {
+        cmk.transferFrom(msg.sender, address(this), cmkAmount);
+        cmk.approve(address(xcmk), cmkAmount);
+        xCmkAmount[tokenId] += xcmk.createShare(cmkAmount);
+
+        emit TokenFunded(tokenId, cmkAmount);
     }
 
     function burn(uint256 tokenId) external {
@@ -108,6 +116,8 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
 
         _burn(tokenId);
+
+        emit DebtResolved(tokenId, _debt);
     }
 
     function subscribe(uint256 tokenId, address subscription) public {
@@ -124,9 +134,11 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
 
         tokenDebtDiscount[tokenId] = CredmarkAccessKeySubscriptionTier(subscription).getGlobalDebt();
         tokenSubscription[tokenId] = subscription;
+
+        emit SubscriptionTierSubscribed(tokenId, subscription);
     }
 
-    function mintFundAndSubscribe(uint256 amount, address subscription) public {
+    function mintFundAndSubscribe(uint256 amount, address subscription) external {
         uint256 tokenId = safeMint(_msgSender());
         fund(tokenId, amount);
         subscribe(tokenId, subscription);
@@ -150,6 +162,8 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
 
         xcmk.removeShare(xCmkAmountTransfered);
         cmk.transfer(credmarkDaoTreasury, _debt);
+
+        emit DebtResolved(tokenId, _debt);
     }
 
     function _beforeTokenTransfer(
