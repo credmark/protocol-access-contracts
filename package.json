@@ -24,7 +24,8 @@
   "homepage": "https://github.com/credmark/protocol-core-contracts#readme",
   "dependencies": {
     "@openzeppelin/contracts": "^4.4.1",
-    "@openzeppelin/contracts-upgradeable": "^4.4.1"
+    "@openzeppelin/contracts-upgradeable": "^4.4.1",
+    "@openzeppelin/hardhat-upgrades": "^1.14.0"
   },
   "devDependencies": {
     "@credmark/protocol-core-contracts": "credmark/protocol-core-contracts#70cc2a5",

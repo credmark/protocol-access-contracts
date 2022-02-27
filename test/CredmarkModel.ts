@@ -3,8 +3,6 @@ import { expect } from 'chai';
 import { BigNumber } from 'ethers';
 import { joinSignature } from 'ethers/lib/utils';
 import { ethers, waffle } from 'hardhat';
-import { Test } from 'mocha';
-import { ReadableStreamBYOBRequest } from 'stream/web';
 import { CredmarkModel } from '../typechain';
 
 describe('Credmark Model', () => {
