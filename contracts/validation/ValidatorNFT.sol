@@ -46,11 +46,11 @@ contract CredmarkValidator is
         return "https://api.credmark.com/v1/meta/validator/";
     }
 
-    function pause() public onlyRole(PAUSER_ROLE) {
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    function unpause() public onlyRole(PAUSER_ROLE) {
+    function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 

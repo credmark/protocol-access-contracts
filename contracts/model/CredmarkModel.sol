@@ -31,11 +31,11 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
         return "https://api.credmark.com/v1/meta/model/";
     }
 
-    function pause() public onlyRole(PAUSER_ROLE) {
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    function unpause() public onlyRole(PAUSER_ROLE) {
+    function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 
