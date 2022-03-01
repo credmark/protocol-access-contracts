@@ -5,6 +5,7 @@ import { joinSignature } from 'ethers/lib/utils';
 import { ethers, upgrades, waffle } from 'hardhat';
 
 import { CredmarkValidator, CredmarkValidatorUpgrade } from '../typechain';
+import { addListener } from 'process';
 
 describe('Validator NFT', () => {
     let credmarkValidator: CredmarkValidator;
@@ -97,6 +98,54 @@ describe('Validator NFT', () => {
             expect(await credmarkValidator.tokenURI(0x00)).to.equal("https://api.credmark.com/v1/meta/validator/" + TEST_URI);
         });
 
+    })
+
+    describe('burn', () => {
+        const TEST_URI = 'TEST_URI';
+        
+        it('Check if owner can  burn nft token', async () => {
+            const tokenId = BigNumber.from(0);
+            await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
+
+            expect(await credmarkValidator.balanceOf(alice.address)).to.equal(
+                BigNumber.from(1)
+            );
+
+            await credmarkValidator.connect(alice).burn(tokenId);
+
+            expect(await credmarkValidator.balanceOf(alice.address)).to.equal(
+                BigNumber.from(0)
+            )
+        })
+
+
+        it('Check if approved can  burn nft token', async () => {
+            const tokenId = BigNumber.from(0);
+            await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
+
+            expect(await credmarkValidator.balanceOf(alice.address)).to.equal(
+                BigNumber.from(1)
+            );
+
+            await credmarkValidator.connect(alice).approve(bob.address, tokenId);
+
+            await credmarkValidator.connect(bob).burn(tokenId);
+
+            expect(await credmarkValidator.balanceOf(alice.address)).to.equal(
+                BigNumber.from(0)
+            )
+        })
+
+        it('Check permission to burn for guest', async () => {
+            const tokenId = BigNumber.from(0);
+            await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
+
+            await expect(credmarkValidator.connect(bob).burn(tokenId)).to.be.reverted;
+
+            expect(await credmarkValidator.balanceOf(alice.address)).to.be.equal(
+                BigNumber.from(1)
+            );
+        })
     })
 
     describe('upgradablity', () => {
