@@ -11,16 +11,16 @@ contract CredmarkRewards is AccessControl {
 
     bytes32 public merkleRoot;
 
-    ERC20 public rewardsToken;
-    ERC721 public nonFungibleToken;
+    IERC20 public rewardsToken;
+    IERC721 public nonFungibleToken;
     mapping(uint256 => uint256) public claimed;
 
     event RewardsClaimed(address indexed _address, uint256 _value);
 
     constructor(
         address admin,
-        ERC20 _rewardsToken,
-        ERC721 _nonFungibleToken
+        IERC20 _rewardsToken,
+        IERC721 _nonFungibleToken
     ) {
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
         rewardsToken = _rewardsToken;
@@ -28,6 +28,7 @@ contract CredmarkRewards is AccessControl {
     }
 
     function setMerkleRoot(bytes32 root) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(merkleRoot == "", "Root already set");
         merkleRoot = root;
     }
 
@@ -36,14 +37,16 @@ contract CredmarkRewards is AccessControl {
         uint256 amount,
         bytes32[] memory proof
     ) external {
-        bytes32 leaf = keccak256(abi.encodePacked(tokenId, amount));
+        bytes32 leaf = keccak256(abi.encode(tokenId, amount));
 
-        require(MerkleProof.verify(proof, merkleRoot, leaf), "Proof invalid.");
+        require(MerkleProof.verify(proof, merkleRoot, leaf), "Invalid proof");
 
         uint256 unclaimedRewards = amount - claimed[tokenId];
         address tokenOwner = nonFungibleToken.ownerOf(tokenId);
+        claimed[tokenId] += unclaimedRewards;
 
         rewardsToken.transfer(tokenOwner, unclaimedRewards);
+
         emit RewardsClaimed(tokenOwner, unclaimedRewards);
     }
 }
