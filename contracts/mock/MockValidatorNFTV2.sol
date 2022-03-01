@@ -9,7 +9,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721Burnab
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
 
-contract CredmarkValidatorUpgrade is
+contract MockValidatorNFTV2 is
     Initializable,
     ERC721Upgradeable,
     ERC721URIStorageUpgradeable,
@@ -23,8 +23,8 @@ contract CredmarkValidatorUpgrade is
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     CountersUpgradeable.Counter private _tokenIdCounter;
     // different from v1
-    event LogCredmarkValidatorUpgradeMinted();
-    event LogCredmarkValidatorUpdated();
+    event NFTMinted();
+    event ValidatorNFTContractUpdated();
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
 
@@ -40,7 +40,7 @@ contract CredmarkValidatorUpgrade is
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
 
-        emit LogCredmarkValidatorUpdated();
+        emit ValidatorNFTContractUpdated();
     }
 
     function _baseURI() internal pure override returns (string memory) {
@@ -48,11 +48,11 @@ contract CredmarkValidatorUpgrade is
         return "https://api.credmark.com/v2/meta/validator/";
     }
 
-    function pause() public onlyRole(PAUSER_ROLE) {
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    function unpause() public onlyRole(PAUSER_ROLE) {
+    function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 
@@ -62,7 +62,7 @@ contract CredmarkValidatorUpgrade is
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, uri);
 
-        emit LogCredmarkValidatorUpgradeMinted();
+        emit NFTMinted();
     }
 
     function _beforeTokenTransfer(
