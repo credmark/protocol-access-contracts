@@ -4,12 +4,12 @@ import { BigNumber } from 'ethers';
 import { joinSignature } from 'ethers/lib/utils';
 import { ethers, upgrades, waffle } from 'hardhat';
 
-import { CredmarkValidator, CredmarkValidatorUpgrade } from '../typechain';
+import { CredmarkValidator, MockValidatorNFTV2 } from '../typechain';
 import { addListener } from 'process';
 
 describe('Validator NFT', () => {
     let credmarkValidator: CredmarkValidator;
-    let credmarkValidatorUpgrade: CredmarkValidatorUpgrade;
+    let mockValidatorNFTV2: MockValidatorNFTV2;
     let deployer: SignerWithAddress;
     let alice: SignerWithAddress;
     let bob: SignerWithAddress;
@@ -29,16 +29,17 @@ describe('Validator NFT', () => {
 
     });
 
-    it('is initialized correctly', async () => {
+    it('Should initialize', async () => {
         expect(await credmarkValidator.name()).to.equal('CredmarkValidator');
         expect(await credmarkValidator.symbol()).to.equal('CMKv');
         expect(await credmarkValidator.hasRole(minterRole, deployer.address)).to.equal(true);
         expect(await credmarkValidator.hasRole(pauserRole, deployer.address)).to.equal(true);
     })
 
-    describe('pause and unpause', () => {
-        it('must be done by deployer', async () => {
+    describe('#pause/unpause', () => {
+        it('Should be done by PAUSER_ROLE', async () => {
             //pause by deployer
+            expect(await credmarkValidator.hasRole(pauserRole, deployer.address)).to.be.equal(true);
             await credmarkValidator.connect(deployer).pause();
             expect(await credmarkValidator.paused()).to.equal(true);
             
@@ -57,10 +58,10 @@ describe('Validator NFT', () => {
         })
     });
 
-    describe('mint', () => {
+    describe('#mint', () => {
         const TEST_URI = "test";
         
-        it('must be done by MINTER_ROLE', async () => {
+        it('Should be done by MINTER_ROLE', async () => {
             await expect(credmarkValidator.connect(alice).safeMint(alice.address, TEST_URI)).to.be.reverted;
 
             //grant minter role to normal user
@@ -71,39 +72,39 @@ describe('Validator NFT', () => {
                 credmarkValidator.connect(alice).safeMint
                 (bob.address, TEST_URI)
                 )
-                .to.emit(credmarkValidator, "LogCredmarkValidatorMinted");
+                .to.emit(credmarkValidator, "NFTMinted");
                 });
 
 
-        it('emit LogCredmarkValidatorMinted event', async () => {
+        it('Should emit NFTMinted event', async () => {
             await expect(
                 credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI)
                 )
-                .to.emit(credmarkValidator, "LogCredmarkValidatorMinted")                
+                .to.emit(credmarkValidator, "NFTMinted")                
             
         });
 
-        it('Check if minted successfully', async () => {
+        it('Should mint nft', async () => {
             await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
             
             expect(await credmarkValidator.balanceOf(alice.address)).to.equal(1);
             
-            expect(await credmarkValidator.tokenURI(0x00)).to.equal("https://api.credmark.com/v1/meta/validator/" + TEST_URI);
-
         });
 
-        it('check if token URI is correct', async () => {
+        it('Should have token URI', async () => {
+            const tokenId = BigNumber.from(0);
+
             await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
                
-            expect(await credmarkValidator.tokenURI(0x00)).to.equal("https://api.credmark.com/v1/meta/validator/" + TEST_URI);
+            expect(await credmarkValidator.tokenURI(tokenId)).to.equal("https://api.credmark.com/v1/meta/validator/" + TEST_URI);
         });
 
     })
 
-    describe('burn', () => {
+    describe('#burn', () => {
         const TEST_URI = 'TEST_URI';
         
-        it('Check if owner can  burn nft token', async () => {
+        it('Should burn nft', async () => {
             const tokenId = BigNumber.from(0);
             await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
 
@@ -119,7 +120,7 @@ describe('Validator NFT', () => {
         })
 
 
-        it('Check if approved can  burn nft token', async () => {
+        it('Should burn nft if approved', async () => {
             const tokenId = BigNumber.from(0);
             await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
 
@@ -136,7 +137,7 @@ describe('Validator NFT', () => {
             )
         })
 
-        it('Check permission to burn for guest', async () => {
+        it('Should not burn if guest', async () => {
             const tokenId = BigNumber.from(0);
             await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
 
@@ -148,30 +149,30 @@ describe('Validator NFT', () => {
         })
     })
 
-    describe('upgradablity', () => {
+    describe('#upgradablity', () => {
 
-        let credmarkValidatorUpgradeFactory : any;
-        let credmarkValidatorUpgradeAttached : any;
+        let mockValidatorNFTV2Factory : any;
+        let mockValidatorNFTV2Attached : any;
         const TEST_URI = 'Upgraded_URI';
 
         beforeEach(async () => {
          
-            credmarkValidatorUpgradeFactory = await ethers.getContractFactory("CredmarkValidatorUpgrade");
+            mockValidatorNFTV2Factory = await ethers.getContractFactory("MockValidatorNFTV2");
          
-            await upgrades.upgradeProxy(credmarkValidator.address, credmarkValidatorUpgradeFactory);
-            credmarkValidatorUpgradeAttached = await credmarkValidatorUpgradeFactory.attach(credmarkValidator.address);
+            await upgrades.upgradeProxy(credmarkValidator.address, mockValidatorNFTV2Factory);
+            mockValidatorNFTV2Attached = await mockValidatorNFTV2Factory.attach(credmarkValidator.address);
         })
 
-        it('check if custom function added successfully', async () => {
+        it('Should add custom function', async () => {
 
-            expect(await credmarkValidatorUpgradeAttached.customFunction()).to.equal(true);
+            expect(await mockValidatorNFTV2Attached.customFunction()).to.equal(true);
         })
 
-        it('check if Mint function upgraded successfully', async () => {
-            await expect(credmarkValidatorUpgradeAttached.connect(deployer).safeMint(alice.address, TEST_URI))
-            .emit(credmarkValidatorUpgradeAttached, "LogCredmarkValidatorUpgradeMinted");
+        it('Should update mint function', async () => {
+            await expect(mockValidatorNFTV2Attached.connect(deployer).safeMint(alice.address, TEST_URI))
+            .emit(mockValidatorNFTV2Attached, "NFTMinted");
         })
-        it('check if tokenURI() function is upgraded', async () => {
+        it('Shoul update tokenURI() function', async () => {
             await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
                
             expect(await credmarkValidator.tokenURI(0x00)).to.equal("https://api.credmark.com/v2/meta/validator/" + TEST_URI);

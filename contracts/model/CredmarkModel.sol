@@ -19,7 +19,7 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
     mapping(uint256 => uint256) public slugHashes;
     mapping(uint256 => uint256) private slugTokens;
 
-    event LogCredmarkModelMinted(uint256 slugHash);
+    event NFTMinted(uint256 slugHash);
 
     constructor() ERC721("CredmarkModel", "CMKm") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -52,7 +52,7 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
         
         _safeMint(to, tokenId);
 
-        emit LogCredmarkModelMinted(slugHash);
+        emit NFTMinted(slugHash);
     }
 
     function getSlugHash(string memory _slug) public pure returns (uint256) {
