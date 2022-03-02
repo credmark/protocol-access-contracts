@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "./CredmarkModel.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
+
 contract CredmarkModeler is ERC721, Pausable, AccessControl {
     using Counters for Counters.Counter;
 
@@ -22,29 +23,46 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
     uint256 private _mintCost;
 
     event NFTMinted(uint256 tokenId);
-    event ModelContractSet(string contractName);
-    event MintTokenSet(string tokenName);
+    event ModelContractSet(CredmarkModel modelContract);
+    event MintTokenSet(ERC20 mintToken);
     event MintCostSet(uint256 cost);
 
-    constructor() ERC721("CredmarkModeler", "CMKmlr") {
+    constructor(
+        CredmarkModel modelContract,
+        ERC20 mintToken,
+        uint256 cost
+    ) ERC721("CredmarkModeler", "CMKmlr") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
+    
+        _modelContract = modelContract;
+        _mintToken = mintToken;
+        _mintCost = cost; 
     }
 
     function setModelContract(CredmarkModel modelContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        
+        require(modelContract != CredmarkModel(address(0)), "Model contract can not be null");
+        
         _modelContract = modelContract;
 
-        emit ModelContractSet(modelContract.name());
+        emit ModelContractSet(modelContract);
     }
 
     function setMintToken(ERC20 mintToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        
+        require(mintToken != ERC20(address(0)), "Mint token contract can not be null");
+
         _mintToken = mintToken;
 
-        emit MintTokenSet(mintToken.name());
+        emit MintTokenSet(mintToken);
     }
 
     function setMintCost(uint256 mintCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        
+        require(mintCost != 0, "Mint cost can not be zero");
+
         _mintCost = mintCost;
 
         emit MintCostSet(mintCost);
