@@ -175,7 +175,9 @@ describe('Validator NFT', () => {
         it('should update mint function', async () => {
             await expect(mockValidatorNFTV2Attached.connect(deployer).safeMint(alice.address, TEST_URI))
             .emit(mockValidatorNFTV2Attached, "NFTMinted")
-            .withArgs(tokenId);
+            .withArgs(
+                tokenId
+                );
         })
         it('should update tokenURI() function', async () => {
             await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);

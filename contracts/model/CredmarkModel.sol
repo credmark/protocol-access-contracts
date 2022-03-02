@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "hardhat/console.sol";
 
 contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
     using Counters for Counters.Counter;
@@ -18,7 +17,7 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
     mapping(uint256 => uint256) public slugHashes;
     mapping(uint256 => uint256) private slugTokens;
 
-    event NFTMinted(uint256 tokenId);
+    event NFTMinted(uint256 tokenId, uint256 slugHash);
 
     constructor() ERC721("CredmarkModel", "CMKm") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -51,7 +50,7 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
         
         _safeMint(to, tokenId);
 
-        emit NFTMinted(tokenId);
+        emit NFTMinted(tokenId, slugHash);
     }
 
     function getSlugHash(string memory _slug) public pure returns (uint256) {

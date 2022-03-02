@@ -68,7 +68,10 @@ describe('Credmark Model', () => {
                 (bob.address, TEST_SLUG)
                 )
                 .to.emit(credmarkModel, "NFTMinted")
-                .withArgs(tokenId);
+                .withArgs(
+                    tokenId, 
+                    await credmarkModel.getSlugHash(TEST_SLUG)
+                    );
         });
 
 
@@ -77,7 +80,10 @@ describe('Credmark Model', () => {
                 credmarkModel.connect(deployer).safeMint(alice.address, TEST_SLUG)
                 )
                 .to.emit(credmarkModel, "NFTMinted")
-                .withArgs(tokenId);
+                .withArgs(
+                    tokenId,
+                    await credmarkModel.getSlugHash(TEST_SLUG)
+                    );
             
         });
 
