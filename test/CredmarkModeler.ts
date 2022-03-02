@@ -43,7 +43,8 @@ describe('Credmark Modeler', () => {
         expect(await credmarkModeler.symbol()).to.equal('CMKmlr');
         expect(await credmarkModeler.hasRole(minterRole, deployer.address)).to.equal(true);
         expect(await credmarkModeler.hasRole(pauserRole, deployer.address)).to.equal(true);
-
+        console.log(credmarkModeler.address);
+        console.log(erc20Fake.address);
     })
 
     describe('#pause/unpause', () => {
@@ -126,7 +127,7 @@ describe('Credmark Modeler', () => {
     describe('#mint', () => {
         const tokenId = BigNumber.from(0);
 
-        it('must be done by MINTER_ROLE', async () => {
+        it('should be done by MINTER_ROLE', async () => {
             await expect(credmarkModeler.connect(alice).safeMint(alice.address)).to.reverted;
 
             //grant minter role to normal user
@@ -142,7 +143,7 @@ describe('Credmark Modeler', () => {
                 });
 
 
-        it('Check if minted successfully', async () => {
+        it('should mint nft', async () => {
             await credmarkModeler.connect(deployer).safeMint(alice.address);
             expect(await credmarkModeler.balanceOf(alice.address)).to.equal(1);
 
