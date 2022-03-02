@@ -21,33 +21,55 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
     ERC20 private _mintToken;
     uint256 private _mintCost;
 
-    constructor() ERC721("CredmarkModel", "CMKm") {
+    event NFTMinted(uint256 tokenId);
+    event ModelContractSet(CredmarkModel modelContract);
+    event MintTokenSet(ERC20 mintToken);
+    event MintCostSet(uint256 cost);
+
+    constructor(
+        CredmarkModel modelContract,
+        ERC20 mintToken,
+        uint256 cost
+    ) ERC721("CredmarkModeler", "CMKmlr") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
+
+        _modelContract = modelContract;
+        _mintToken = mintToken;
+        _mintCost = cost;
     }
 
     function setModelContract(CredmarkModel modelContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(modelContract != CredmarkModel(address(0)), "Model contract can not be null");
+
         _modelContract = modelContract;
+        emit ModelContractSet(modelContract);
     }
 
     function setMintToken(ERC20 mintToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(mintToken != ERC20(address(0)), "Mint token contract can not be null");
+
         _mintToken = mintToken;
+        emit MintTokenSet(mintToken);
     }
 
     function setMintCost(uint256 mintCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(mintCost != 0, "Mint cost can not be zero");
+
         _mintCost = mintCost;
+        emit MintCostSet(mintCost);
     }
 
     function _baseURI() internal pure override returns (string memory) {
         return "https://api.credmark.com/v1/meta/modelers/";
     }
 
-    function pause() public onlyRole(PAUSER_ROLE) {
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    function unpause() public onlyRole(PAUSER_ROLE) {
+    function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 
@@ -56,6 +78,8 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
         _tokenIdCounter.increment();
         _mintToken.transferFrom(_msgSender(), address(this), _mintCost);
         _safeMint(to, tokenId);
+
+        emit NFTMinted(tokenId);
     }
 
     function getSlugHash(string memory _slug) public pure returns (uint256) {

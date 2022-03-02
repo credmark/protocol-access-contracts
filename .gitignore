@@ -107,3 +107,6 @@ artifacts/
 build/
 cache/
 typechain/
+
+.vscode/
+.openzeppelin/
