@@ -60,6 +60,7 @@ describe('Validator NFT', () => {
 
     describe('#mint', () => {
         const TEST_URI = "test";
+        const tokenId = BigNumber.from(0);
         
         it('should be done by MINTER_ROLE', async () => {
             await expect(credmarkValidator.connect(alice).safeMint(alice.address, TEST_URI)).to.be.reverted;
@@ -72,7 +73,8 @@ describe('Validator NFT', () => {
                 credmarkValidator.connect(alice).safeMint
                 (bob.address, TEST_URI)
                 )
-                .to.emit(credmarkValidator, "NFTMinted");
+                .to.emit(credmarkValidator, "NFTMinted")
+                .withArgs(tokenId);
                 });
 
 
@@ -80,7 +82,8 @@ describe('Validator NFT', () => {
             await expect(
                 credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI)
                 )
-                .to.emit(credmarkValidator, "NFTMinted")                
+                .to.emit(credmarkValidator, "NFTMinted")  
+                .withArgs(tokenId)              
             
         });
 
@@ -154,6 +157,7 @@ describe('Validator NFT', () => {
         let mockValidatorNFTV2Factory : any;
         let mockValidatorNFTV2Attached : any;
         const TEST_URI = 'Upgraded_URI';
+        const tokenId = BigNumber.from(0);
 
         beforeEach(async () => {
          
@@ -170,9 +174,10 @@ describe('Validator NFT', () => {
 
         it('should update mint function', async () => {
             await expect(mockValidatorNFTV2Attached.connect(deployer).safeMint(alice.address, TEST_URI))
-            .emit(mockValidatorNFTV2Attached, "NFTMinted");
+            .emit(mockValidatorNFTV2Attached, "NFTMinted")
+            .withArgs(tokenId);
         })
-        it('Shoul update tokenURI() function', async () => {
+        it('should update tokenURI() function', async () => {
             await credmarkValidator.connect(deployer).safeMint(alice.address, TEST_URI);
                
             expect(await credmarkValidator.tokenURI(0x00)).to.equal("https://api.credmark.com/v2/meta/validator/" + TEST_URI);

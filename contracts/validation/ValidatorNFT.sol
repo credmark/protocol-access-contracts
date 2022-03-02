@@ -23,7 +23,7 @@ contract CredmarkValidator is
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     CountersUpgradeable.Counter private _tokenIdCounter;
 
-    event NFTMinted();
+    event NFTMinted(uint256 tokenId);
     event ValidatorNFTContractUpdated();
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
@@ -60,7 +60,7 @@ contract CredmarkValidator is
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, uri);
 
-        emit NFTMinted();
+        emit NFTMinted(tokenId);
     }
 
     function _beforeTokenTransfer(
