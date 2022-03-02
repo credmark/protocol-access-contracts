@@ -4,6 +4,7 @@ import '@nomiclabs/hardhat-waffle';
 import '@typechain/hardhat';
 import 'dotenv/config';
 import 'hardhat-gas-reporter';
+import '@openzeppelin/hardhat-upgrades';
 import { HardhatUserConfig } from 'hardhat/types';
 import './tasks';
 
