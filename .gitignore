@@ -108,5 +108,4 @@ build/
 cache/
 typechain/
 
-.openzeppelin/
 .vscode/

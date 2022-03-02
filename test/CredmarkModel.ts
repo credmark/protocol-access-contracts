@@ -24,7 +24,7 @@ describe('Credmark Model', () => {
 
     });
 
-    it('Should construct', async () => {
+    it('should construct', async () => {
         expect(await credmarkModel.name()).to.equal('CredmarkModel');
         expect(await credmarkModel.symbol()).to.equal('CMKm');
         expect(await credmarkModel.hasRole(minterRole, deployer.address)).to.equal(true);
@@ -32,7 +32,7 @@ describe('Credmark Model', () => {
     })
 
     describe('#pause/unpause', () => {
-        it('Should be done by PASER_ROLE', async () => {
+        it('should be done by PAUSER_ROLE', async () => {
             //pause by deployer
             await credmarkModel.connect(deployer).pause();
             expect(await credmarkModel.paused()).to.equal(true);
@@ -45,7 +45,7 @@ describe('Credmark Model', () => {
 
         });
 
-        it('Should not be done by non-pauser', async () => {
+        it('should not be done by non-pauser', async () => {
             await expect(credmarkModel.connect(alice).pause()).to.be.reverted;
             await expect(credmarkModel.connect(alice).unpause()).to.be.reverted;
 
@@ -54,8 +54,9 @@ describe('Credmark Model', () => {
 
     describe('#mint', () => {
         const TEST_SLUG = "test";
+        const tokenId = BigNumber.from(1);
         
-        it('Should be done by MINTER_ROLE', async () => {
+        it('should be done by MINTER_ROLE', async () => {
             await expect(credmarkModel.connect(alice).safeMint(alice.address, TEST_SLUG)).to.reverted;
 
             //grant minter role to normal user
@@ -66,26 +67,27 @@ describe('Credmark Model', () => {
                 credmarkModel.connect(alice).safeMint
                 (bob.address, TEST_SLUG)
                 )
-                .to.emit(credmarkModel, "LogCredmarkModelMinted");
-                });
+                .to.emit(credmarkModel, "NFTMinted")
+                .withArgs(tokenId);
+        });
 
 
-        it('Should emit NFTMinted event', async () => {
+        it('should emit NFTMinted event', async () => {
             await expect(
                 credmarkModel.connect(deployer).safeMint(alice.address, TEST_SLUG)
                 )
-                .to.emit(credmarkModel, "LogCredmarkModelMinted")
-                .withArgs(await credmarkModel.getSlugHash(TEST_SLUG));
+                .to.emit(credmarkModel, "NFTMinted")
+                .withArgs(tokenId);
             
         });
 
-        it('Should mint nft', async () => {
+        it('should mint nft', async () => {
             await credmarkModel.connect(deployer).safeMint(alice.address, TEST_SLUG);
             expect(await credmarkModel.balanceOf(alice.address)).to.equal(1);
 
         })
 
-        it('Should not mint using same slug', async () => {
+        it('should not mint using same slug', async () => {
             await credmarkModel.connect(deployer).safeMint(alice.address, TEST_SLUG);           
             
             await expect(credmarkModel.connect(deployer).safeMint(bob.address, TEST_SLUG)).to.be.revertedWith(
