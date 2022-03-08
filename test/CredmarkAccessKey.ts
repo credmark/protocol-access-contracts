@@ -4,7 +4,6 @@ import { BigNumber } from 'ethers';
 import { ethers, waffle } from 'hardhat';
 import {
   CredmarkAccessKey,
-  StakedCredmark,
   MockCMK,
   CredmarkPriceOracleUsd,
   CredmarkAccessKeySubscriptionTier,
@@ -26,21 +25,12 @@ describe('Credmark Access Key', () => {
     const mockCmkFactory = await ethers.getContractFactory('MockCMK');
     const _cmk = (await mockCmkFactory.connect(admin).deploy()) as MockCMK;
 
-    const stakedCmkFactory = await ethers.getContractFactory('StakedCredmark');
-    const _stakedCmk = (await stakedCmkFactory
-      .connect(admin)
-      .deploy(_cmk.address)) as StakedCredmark;
-
     const credmarkAccessKeyFactory = await ethers.getContractFactory(
       'CredmarkAccessKey'
     );
     const _credmarkAccessKey = (await credmarkAccessKeyFactory
       .connect(admin)
-      .deploy(
-        _cmk.address,
-        _stakedCmk.address,
-        credmarkDao.address
-      )) as CredmarkAccessKey;
+      .deploy(_cmk.address, credmarkDao.address)) as CredmarkAccessKey;
 
     return [_cmk.connect(wallet), _credmarkAccessKey.connect(wallet)];
   };
@@ -77,13 +67,13 @@ describe('Credmark Access Key', () => {
       const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
       await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
 
-      await credmarkAccessKey
-        .connect(admin)
-        .createSubscriptionTier(
-          oracle.address,
-          BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
-          false
-        );
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
+      );
 
       expect(await credmarkAccessKey.totalSupportedTiers()).to.be.equal(
         BigNumber.from(1)
@@ -95,7 +85,7 @@ describe('Credmark Access Key', () => {
         newTierAddress
       )) as CredmarkAccessKeySubscriptionTier;
 
-      expect(await newTier.locked()).to.be.equal(false);
+      expect(await newTier.subscribable()).to.be.equal(true);
       expect(await newTier.monthlyFeeUsdWei()).to.be.equal(
         BigNumber.from(100).mul(BigNumber.from(10).pow(18))
       );
@@ -116,31 +106,14 @@ describe('Credmark Access Key', () => {
       await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
 
       await expect(
-        credmarkAccessKey
-          .connect(otherWallet)
-          .createSubscriptionTier(
-            oracle.address,
-            BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
-            false
-          )
+        credmarkAccessKey.connect(otherWallet).createSubscriptionTier(
+          admin.address,
+          oracle.address,
+          BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+          3600, // 1hour
+          true
+        )
       ).to.be.reverted;
-    });
-  });
-
-  describe('#fund', () => {
-    it('should fund', async () => {
-      const tokenId = BigNumber.from(0);
-      const fundAmount = BigNumber.from(1000);
-
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
-
-      await credmarkAccessKey.safeMint(wallet.address);
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
-      await credmarkAccessKey.fund(tokenId, fundAmount);
-
-      expect(await credmarkAccessKey.xCmkAmount(tokenId)).to.be.equal(
-        fundAmount
-      );
     });
   });
 
@@ -153,7 +126,6 @@ describe('Credmark Access Key', () => {
 
       await credmarkAccessKey.safeMint(wallet.address);
       await cmk.approve(credmarkAccessKey.address, fundAmount);
-      await credmarkAccessKey.fund(tokenId, fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
@@ -162,9 +134,11 @@ describe('Credmark Access Key', () => {
       await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
         oracle.address,
-        BigNumber.from(100).mul(BigNumber.from(10).pow(18)), // $100
-        false
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
       );
 
       const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
@@ -180,7 +154,6 @@ describe('Credmark Access Key', () => {
 
       await credmarkAccessKey.safeMint(wallet.address);
       await cmk.approve(credmarkAccessKey.address, fundAmount);
-      await credmarkAccessKey.fund(tokenId, fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
@@ -191,12 +164,16 @@ describe('Credmark Access Key', () => {
       const newTierFactory = await ethers.getContractFactory(
         'CredmarkAccessKeySubscriptionTier'
       );
-      const newTier =
-        (await newTierFactory.deploy()) as CredmarkAccessKeySubscriptionTier;
-      await newTier.setPriceOracle(oracle.address);
-      await newTier.setMonthlyFeeUsd(
-        BigNumber.from(100).mul(BigNumber.from(10).pow(18))
-      );
+
+      const newTier = (await newTierFactory.deploy(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        BigNumber.from(3600), // 1hour
+        cmk.address
+      )) as CredmarkAccessKeySubscriptionTier;
+
+      await newTier.setSubscribable(true);
 
       await expect(
         credmarkAccessKey.subscribe(tokenId, newTier.address)
@@ -211,7 +188,37 @@ describe('Credmark Access Key', () => {
 
       await credmarkAccessKey.safeMint(wallet.address);
       await cmk.approve(credmarkAccessKey.address, fundAmount);
-      await credmarkAccessKey.fund(tokenId, fundAmount);
+
+      const oracleFactory = await ethers.getContractFactory(
+        'CredmarkPriceOracleUsd'
+      );
+      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        false
+      );
+
+      const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
+
+      await expect(
+        credmarkAccessKey.subscribe(tokenId, subscriptionTierAddress)
+      ).to.be.revertedWith('Tier is not subscribable');
+    });
+  });
+
+  describe('#fund', () => {
+    it('should fund', async () => {
+      const tokenId = BigNumber.from(0);
+      const fundAmount = BigNumber.from(1000);
+
+      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+
+      await credmarkAccessKey.safeMint(wallet.address);
+      await cmk.approve(credmarkAccessKey.address, fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
@@ -219,25 +226,27 @@ describe('Credmark Access Key', () => {
       const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
       await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
 
-      const newTierFactory = await ethers.getContractFactory(
-        'CredmarkAccessKeySubscriptionTier'
-      );
-      const newTier =
-        (await newTierFactory.deploy()) as CredmarkAccessKeySubscriptionTier;
-      await newTier.setPriceOracle(oracle.address);
-      await newTier.setMonthlyFeeUsd(
-        BigNumber.from(100).mul(BigNumber.from(10).pow(18))
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
       );
 
-      await newTier.lockTier(true);
+      const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
 
-      await expect(
-        credmarkAccessKey.subscribe(tokenId, newTier.address)
-      ).to.be.revertedWith('Tier is Locked');
+      await credmarkAccessKey.subscribe(tokenId, subscriptionTierAddress);
+
+      await credmarkAccessKey.fund(tokenId, fundAmount);
+
+      expect(await credmarkAccessKey.cmkAmount(tokenId)).to.be.equal(
+        fundAmount
+      );
     });
   });
 
-  describe('#mintFundAndSubscribe', () => {
+  describe('#mintSubscribeAndFund', () => {
     it('should mint, fund & subscribe', async () => {
       const fundAmount = BigNumber.from(1000);
 
@@ -251,17 +260,17 @@ describe('Credmark Access Key', () => {
       const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
       await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
 
-      await credmarkAccessKey
-        .connect(admin)
-        .createSubscriptionTier(
-          oracle.address,
-          BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
-          false
-        );
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
+      );
 
       const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
 
-      await credmarkAccessKey.mintFundAndSubscribe(
+      await credmarkAccessKey.mintSubscribeAndFund(
         fundAmount,
         subscriptionTierAddress
       );
@@ -283,24 +292,24 @@ describe('Credmark Access Key', () => {
       const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
-      await credmarkAccessKey
-        .connect(admin)
-        .createSubscriptionTier(
-          oracle.address,
-          BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
-          false
-        );
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
+      );
 
       const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
 
       // Token ID 0
-      await credmarkAccessKey.mintFundAndSubscribe(
+      await credmarkAccessKey.mintSubscribeAndFund(
         fundAmount,
         subscriptionTierAddress
       );
 
       // Token ID 1
-      await credmarkAccessKey.mintFundAndSubscribe(
+      await credmarkAccessKey.mintSubscribeAndFund(
         fundAmount,
         subscriptionTierAddress
       );
@@ -343,9 +352,9 @@ describe('Credmark Access Key', () => {
         subscriptionTierAddress
       )) as CredmarkAccessKeySubscriptionTier;
 
-      await subscriptionTier.setMonthlyFeeUsd(
-        BigNumber.from(200).mul(BigNumber.from(10).pow(18))
-      );
+      await subscriptionTier
+        .connect(admin)
+        .setMonthlyFeeUsd(BigNumber.from(200).mul(BigNumber.from(10).pow(18)));
 
       await ethers.provider.send('evm_increaseTime', [sevenDays]);
       await ethers.provider.send('evm_mine', []);
@@ -387,18 +396,18 @@ describe('Credmark Access Key', () => {
       const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
-      await credmarkAccessKey
-        .connect(admin)
-        .createSubscriptionTier(
-          oracle.address,
-          BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
-          false
-        );
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
+      );
 
       const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
 
       // Token ID 0
-      await credmarkAccessKey.mintFundAndSubscribe(
+      await credmarkAccessKey.mintSubscribeAndFund(
         fundAmount,
         subscriptionTierAddress
       );
@@ -426,7 +435,7 @@ describe('Credmark Access Key', () => {
       await credmarkAccessKey.burn(tokenId);
 
       expect(
-        (await credmarkAccessKey.xCmkAmount(tokenId)).div(
+        (await credmarkAccessKey.cmkAmount(tokenId)).div(
           BigNumber.from(10).pow(18)
         )
       ).to.equal(0);
@@ -459,17 +468,17 @@ describe('Credmark Access Key', () => {
       const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
-      await credmarkAccessKey
-        .connect(admin)
-        .createSubscriptionTier(
-          oracle.address,
-          BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
-          false
-        );
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
+      );
 
       const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
 
-      await credmarkAccessKey.mintFundAndSubscribe(
+      await credmarkAccessKey.mintSubscribeAndFund(
         fundAmount,
         subscriptionTierAddress
       );
@@ -494,17 +503,17 @@ describe('Credmark Access Key', () => {
       const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
-      await credmarkAccessKey
-        .connect(admin)
-        .createSubscriptionTier(
-          oracle.address,
-          BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
-          false
-        );
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
+      );
 
       const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
 
-      await credmarkAccessKey.mintFundAndSubscribe(
+      await credmarkAccessKey.mintSubscribeAndFund(
         fundAmount,
         subscriptionTierAddress
       );
@@ -542,17 +551,17 @@ describe('Credmark Access Key', () => {
       const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
-      await credmarkAccessKey
-        .connect(admin)
-        .createSubscriptionTier(
-          oracle.address,
-          BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
-          false
-        );
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
+      );
 
       const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
 
-      await credmarkAccessKey.mintFundAndSubscribe(
+      await credmarkAccessKey.mintSubscribeAndFund(
         fundAmount,
         subscriptionTierAddress
       );
@@ -564,7 +573,7 @@ describe('Credmark Access Key', () => {
 
       await credmarkAccessKey.connect(otherWallet).liquidate(tokenId);
 
-      expect(await credmarkAccessKey.xCmkAmount(tokenId)).to.equal(0);
+      expect(await credmarkAccessKey.cmkAmount(tokenId)).to.equal(0);
       expect(await cmk.balanceOf(wallet.address)).to.equal(0);
       expect(await cmk.balanceOf(credmarkDao.address)).to.equal(fundAmount);
     });
@@ -584,17 +593,17 @@ describe('Credmark Access Key', () => {
       const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
-      await credmarkAccessKey
-        .connect(admin)
-        .createSubscriptionTier(
-          oracle.address,
-          BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
-          false
-        );
+      await credmarkAccessKey.connect(admin).createSubscriptionTier(
+        admin.address,
+        oracle.address,
+        BigNumber.from(100).mul(BigNumber.from(10).pow(18)),
+        3600, // 1hour
+        true
+      );
 
       const subscriptionTierAddress = await credmarkAccessKey.supportedTiers(0);
 
-      await credmarkAccessKey.mintFundAndSubscribe(
+      await credmarkAccessKey.mintSubscribeAndFund(
         fundAmount,
         subscriptionTierAddress
       );
