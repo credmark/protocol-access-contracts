@@ -93,28 +93,6 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         return supportedTiers.length;
     }
 
-    function liquidate(uint256 tokenId) external {
-        require(tokenSubscription[tokenId] != address(0), "Not subscribed");
-        uint256 _debt = debt(tokenId);
-        uint256 _cmkAmount = (CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).withdrawalAmount(
-            address(this)
-        ) * cmkAmount[tokenId]) / totalCmkStaked;
-
-        require(_debt > _cmkAmount, "Access Key is solvent");
-
-        uint256 unstakedAmount = CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).unstake(
-            cmkAmount[tokenId]
-        );
-
-        tokenDebtDiscount[tokenId] += unstakedAmount;
-        totalCmkStaked -= cmkAmount[tokenId];
-        cmkAmount[tokenId] = 0;
-
-        cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
-
-        emit TokenLiquidated(tokenId, _debt);
-    }
-
     function burn(uint256 tokenId) external {
         require(_isApprovedOrOwner(msg.sender, tokenId), "Approval required");
         require(
@@ -195,12 +173,36 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         uint256 _cmkAmount = (tier.withdrawalAmount(address(this)) * cmkAmount[tokenId]) / totalCmkStaked;
 
         uint256 cmkToUnstake = (_debt * cmkAmount[tokenId]) / _cmkAmount;
+
+        require(cmkAmount[tokenId] >= cmkToUnstake, "Insufficient fund");
         cmkAmount[tokenId] -= cmkToUnstake;
 
         tier.unstake(cmkToUnstake);
-        cmk.transfer(credmarkDaoTreasury, _debt);
+        cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
 
         emit DebtResolved(tokenId, _debt);
+    }
+
+    function liquidate(uint256 tokenId) external {
+        require(tokenSubscription[tokenId] != address(0), "Not subscribed");
+        uint256 _debt = debt(tokenId);
+        uint256 _cmkAmount = (CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).withdrawalAmount(
+            address(this)
+        ) * cmkAmount[tokenId]) / totalCmkStaked;
+
+        require(_debt > _cmkAmount, "Access Key is solvent");
+
+        uint256 unstakedAmount = CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).unstake(
+            cmkAmount[tokenId]
+        );
+
+        tokenDebtDiscount[tokenId] += unstakedAmount;
+        totalCmkStaked -= cmkAmount[tokenId];
+        cmkAmount[tokenId] = 0;
+
+        cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
+
+        emit TokenLiquidated(tokenId, _debt);
     }
 
     function _beforeTokenTransfer(
