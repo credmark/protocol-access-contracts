@@ -47,25 +47,25 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         updateGlobalDebt();
     }
 
-    function setMonthlyFeeUsd(uint256 monthlyFeeUsd) external onlyRole(TIER_MANAGER) {
-        monthlyFeeUsdWei = monthlyFeeUsd;
+    function setMonthlyFeeUsd(uint256 newMonthlyFeeUsdWei) external onlyRole(TIER_MANAGER) {
+        monthlyFeeUsdWei = newMonthlyFeeUsdWei;
         updateGlobalDebt();
     }
 
-    function setPriceOracle(address priceOracle) external onlyRole(TIER_MANAGER) {
-        oracle = IPriceOracle(priceOracle);
+    function setPriceOracle(address newPriceOracle) external onlyRole(TIER_MANAGER) {
+        oracle = IPriceOracle(newPriceOracle);
     }
 
-    function setLockupPeriod(uint256 lockupPeriod) external onlyRole(TIER_MANAGER) {
-        lockupPeriodSeconds = lockupPeriod;
+    function setLockupPeriod(uint256 newLockupPeriod) external onlyRole(TIER_MANAGER) {
+        lockupPeriodSeconds = newLockupPeriod;
     }
 
-    function setSubscribable(bool _subscribable) external onlyRole(TIER_MANAGER) {
-        subscribable = _subscribable;
+    function setSubscribable(bool isSubscribable) external onlyRole(TIER_MANAGER) {
+        subscribable = isSubscribable;
     }
 
-    function setRewardsPool(address _rewardsPool) external onlyRole(TIER_MANAGER) {
-        rewardsPool = IRewardsPool(_rewardsPool);
+    function setRewardsPool(address newRewardsPool) external onlyRole(TIER_MANAGER) {
+        rewardsPool = IRewardsPool(newRewardsPool);
     }
 
     function getGlobalDebt() public view returns (uint256) {

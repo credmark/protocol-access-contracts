@@ -38,7 +38,6 @@ contract RewardsPool is IRewardsPool, Ownable {
 
     function start(uint256 _emissionRate) external onlyOwner {
         require(!started, "Contract Already Started");
-        require(_emissionRate > 0, "Emission rate should be > 0");
 
         lastRewardTime = _now();
         emissionRate = _emissionRate;
@@ -48,16 +47,14 @@ contract RewardsPool is IRewardsPool, Ownable {
         emit PoolStarted();
     }
 
-    function setEmissionRate(uint256 _emissionRate) external onlyOwner {
-        require(_emissionRate > 0, "Emission rate should be > 0");
-
+    function setEmissionRate(uint256 newEmissionRate) external onlyOwner {
         if (emissionRate > 0) {
             issueRewards();
         }
 
-        _emissionRate = emissionRate;
+        emissionRate = newEmissionRate;
 
-        emit EmissionRateChanged(_emissionRate);
+        emit EmissionRateChanged(emissionRate);
     }
 
     function addRecipient(address recipient, uint256 multiplier) external onlyOwner {

@@ -45,8 +45,8 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         _grantRole(TIER_MANAGER, msg.sender);
     }
 
-    function setDaoTreasury(address _credmarkDaoTreasury) external onlyRole(DAO_MANAGER) {
-        credmarkDaoTreasury = _credmarkDaoTreasury;
+    function setDaoTreasury(address newCredmarkDaoTreasury) external onlyRole(DAO_MANAGER) {
+        credmarkDaoTreasury = newCredmarkDaoTreasury;
     }
 
     function safeMint(address to) public returns (uint256 tokenId) {
