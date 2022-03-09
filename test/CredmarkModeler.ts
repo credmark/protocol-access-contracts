@@ -10,8 +10,8 @@ describe('Credmark Modeler', () => {
   let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
-  let minterRole = ethers.utils.id('MINTER_ROLE');
-  let pauserRole = ethers.utils.id('PAUSER_ROLE');
+  const minterRole = ethers.utils.id('MINTER_ROLE');
+  const pauserRole = ethers.utils.id('PAUSER_ROLE');
 
   let mockCMK: MockCMK;
 
@@ -54,11 +54,11 @@ describe('Credmark Modeler', () => {
 
   describe('#pause/unpause', () => {
     it('must be done by deployer', async () => {
-      //pause by deployer
+      // pause by deployer
       await credmarkModeler.connect(deployer).pause();
       expect(await credmarkModeler.paused()).to.equal(true);
 
-      //unpuase by pauser
+      // unpuase by pauser
       await credmarkModeler.grantRole(pauserRole, alice.address);
 
       await credmarkModeler.connect(alice).unpause();
@@ -148,13 +148,11 @@ describe('Credmark Modeler', () => {
       await expect(credmarkModeler.connect(alice).safeMint(alice.address)).to
         .reverted;
 
-      //grant minter role to normal user
+      // grant minter role to normal user
 
       await credmarkModeler
         .connect(deployer)
         .grantRole(minterRole, alice.address);
-
-      console.log(await mockCMK.balanceOf(alice.address));
 
       await expect(credmarkModeler.connect(alice).safeMint(bob.address))
         .to.emit(credmarkModeler, 'NFTMinted')
