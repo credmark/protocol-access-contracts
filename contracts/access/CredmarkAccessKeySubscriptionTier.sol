@@ -3,7 +3,7 @@ pragma solidity ^0.8.2;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../rewards/RewardsPool.sol";
+import "../interfaces/IRewardsPool.sol";
 import "../interfaces/IPriceOracle.sol";
 
 contract CredmarkAccessKeySubscriptionTier is AccessControl {
@@ -20,7 +20,7 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
     IERC20 public stakingToken;
     bool public subscribable;
 
-    RewardsPool public rewardsPool;
+    IRewardsPool public rewardsPool;
 
     uint256 private _totalStaked;
     mapping(address => uint256) private _balances;
@@ -65,7 +65,7 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
     }
 
     function setRewardsPool(address _rewardsPool) external onlyRole(TIER_MANAGER) {
-        rewardsPool = RewardsPool(_rewardsPool);
+        rewardsPool = IRewardsPool(_rewardsPool);
     }
 
     function getGlobalDebt() public view returns (uint256) {
