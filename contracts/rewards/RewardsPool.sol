@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IRewardsPool.sol";
 
 struct RecipientInfo {
@@ -111,7 +111,7 @@ contract RewardsPool is IRewardsPool, Ownable {
             return 0;
         }
 
-        RecipientInfo memory recipientInfo;
+        RecipientInfo memory recipientInfo = RecipientInfo({addr: address(0), multiplier: 0, startTime: 0});
         uint256 currentTime = _now();
         uint256 sum = 0;
         for (uint256 i = 0; i < recipients.length; i++) {
@@ -125,15 +125,15 @@ contract RewardsPool is IRewardsPool, Ownable {
         }
 
         require(recipientInfo.addr != address(0), "Invalid recipient");
-        if (sum == 0) {
-            return 0;
+        if (sum > 0) {
+            uint256 startTime = recipientInfo.startTime > lastRewardTime ? recipientInfo.startTime : lastRewardTime;
+            return
+                (recipientInfo.multiplier *
+                    (currentTime - startTime) *
+                    rewardsToken.balanceOf(recipientInfo.addr) *
+                    availableRewards) / sum;
         }
 
-        uint256 startTime = recipientInfo.startTime > lastRewardTime ? recipientInfo.startTime : lastRewardTime;
-        return
-            (recipientInfo.multiplier *
-                (currentTime - startTime) *
-                rewardsToken.balanceOf(recipientInfo.addr) *
-                availableRewards) / sum;
+        return 0;
     }
 }

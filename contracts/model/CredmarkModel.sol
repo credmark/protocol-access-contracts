@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
 
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
 contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
@@ -39,15 +39,15 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
 
     function safeMint(address to, string memory _slug) public onlyRole(MINTER_ROLE) {
         uint256 slugHash = getSlugHash(_slug);
-        
+
         require(slugTokens[slugHash] == 0x0, "Slug already Exists");
-        
+
         _tokenIdCounter.increment();
         uint256 tokenId = _tokenIdCounter.current();
-        
+
         slugHashes[tokenId] = slugHash;
         slugTokens[slugHash] = tokenId;
-        
+
         _safeMint(to, tokenId);
 
         emit NFTMinted(tokenId, slugHash);

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./CredmarkModel.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract CredmarkModeler is ERC721, Pausable, AccessControl {
     using Counters for Counters.Counter;
@@ -18,39 +19,39 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
 
     CredmarkModel private _modelContract;
 
-    ERC20 private _mintToken;
+    IERC20 private _mintToken;
     uint256 private _mintCost;
 
     event NFTMinted(uint256 tokenId);
-    event ModelContractSet(CredmarkModel modelContract);
-    event MintTokenSet(ERC20 mintToken);
+    event ModelContractSet(address modelContract);
+    event MintTokenSet(address mintToken);
     event MintCostSet(uint256 cost);
 
     constructor(
-        CredmarkModel modelContract,
-        ERC20 mintToken,
+        address modelContract,
+        address mintToken,
         uint256 cost
     ) ERC721("CredmarkModeler", "CMKmlr") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
 
-        _modelContract = modelContract;
-        _mintToken = mintToken;
+        _modelContract = CredmarkModel(modelContract);
+        _mintToken = IERC20(mintToken);
         _mintCost = cost;
     }
 
-    function setModelContract(CredmarkModel modelContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(modelContract != CredmarkModel(address(0)), "Model contract can not be null");
+    function setModelContract(address modelContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(modelContract != address(0), "Model contract can not be null");
 
-        _modelContract = modelContract;
+        _modelContract = CredmarkModel(modelContract);
         emit ModelContractSet(modelContract);
     }
 
-    function setMintToken(ERC20 mintToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(mintToken != ERC20(address(0)), "Mint token contract can not be null");
+    function setMintToken(address mintToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(mintToken != address(0), "Mint token contract can not be null");
 
-        _mintToken = mintToken;
+        _mintToken = IERC20(mintToken);
         emit MintTokenSet(mintToken);
     }
 
@@ -76,7 +77,7 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
     function safeMint(address to) public onlyRole(MINTER_ROLE) {
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
-        _mintToken.transferFrom(_msgSender(), address(this), _mintCost);
+        SafeERC20.safeTransferFrom(_mintToken, _msgSender(), address(this), _mintCost);
         _safeMint(to, tokenId);
 
         emit NFTMinted(tokenId);

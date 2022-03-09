@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "../interfaces/IPriceOracle.sol";
 import "./CredmarkAccessKeySubscriptionTier.sol";
 
@@ -58,7 +59,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     function fund(uint256 tokenId, uint256 amount) public {
         require(tokenSubscription[tokenId] != address(0), "Not subscribed");
 
-        cmk.transferFrom(msg.sender, address(this), amount);
+        SafeERC20.safeTransferFrom(cmk, msg.sender, address(this), amount);
         cmk.approve(tokenSubscription[tokenId], amount);
         cmkAmount[tokenId] += amount;
         totalCmkStaked += amount;
@@ -74,7 +75,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         uint256 monthlyFeeUsd,
         uint256 lockupPeriod,
         bool subscribable
-    ) public onlyRole(TIER_MANAGER) returns (address tierAddress) {
+    ) external onlyRole(TIER_MANAGER) returns (address tierAddress) {
         CredmarkAccessKeySubscriptionTier newTier = new CredmarkAccessKeySubscriptionTier(
             tierManager,
             priceOracle,
@@ -123,8 +124,8 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         delete cmkAmount[tokenId];
         delete tokenDebtDiscount[tokenId];
 
-        cmk.transfer(ownerOf(tokenId), unstakedAmount - _debt);
-        cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
+        SafeERC20.safeTransfer(cmk, ownerOf(tokenId), unstakedAmount - _debt);
+        SafeERC20.safeTransfer(cmk, credmarkDaoTreasury, cmk.balanceOf(address(this)));
 
         _burn(tokenId);
 
@@ -184,7 +185,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         cmkAmount[tokenId] -= cmkToUnstake;
 
         tier.unstake(cmkToUnstake);
-        cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
+        SafeERC20.safeTransfer(cmk, credmarkDaoTreasury, cmk.balanceOf(address(this)));
 
         emit DebtResolved(tokenId, _debt);
     }
@@ -206,7 +207,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         totalCmkStaked -= cmkAmount[tokenId];
         cmkAmount[tokenId] = 0;
 
-        cmk.transfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
+        SafeERC20.safeTransfer(cmk, credmarkDaoTreasury, cmk.balanceOf(address(this)));
 
         emit TokenLiquidated(tokenId, _debt);
     }

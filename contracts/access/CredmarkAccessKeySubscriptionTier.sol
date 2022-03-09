@@ -3,8 +3,9 @@ pragma solidity ^0.8.2;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../interfaces/IRewardsPool.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/IPriceOracle.sol";
+import "../interfaces/IRewardsPool.sol";
 
 contract CredmarkAccessKeySubscriptionTier is AccessControl {
     bytes32 public constant TIER_MANAGER = keccak256("TIER_MANAGER");
@@ -94,7 +95,7 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
 
         _totalStaked += amount;
         _balances[msg.sender] += amount;
-        stakingToken.transferFrom(msg.sender, address(this), amount);
+        SafeERC20.safeTransferFrom(stakingToken, msg.sender, address(this), amount);
         emit Staked(msg.sender, amount);
     }
 
@@ -127,7 +128,7 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         uint256 withdrawAmount = amount + rewardsAmount;
         _totalStaked -= amount;
         _balances[msg.sender] -= amount;
-        stakingToken.transfer(msg.sender, withdrawAmount);
+        SafeERC20.safeTransfer(stakingToken, msg.sender, withdrawAmount);
 
         emit Unstaked(msg.sender, amount, rewardsAmount);
 

@@ -2,8 +2,9 @@
 pragma solidity ^0.8.2;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 contract CredmarkRewards is AccessControl {
@@ -45,7 +46,7 @@ contract CredmarkRewards is AccessControl {
         address tokenOwner = nonFungibleToken.ownerOf(tokenId);
         claimed[tokenId] += unclaimedRewards;
 
-        rewardsToken.transfer(tokenOwner, unclaimedRewards);
+        SafeERC20.safeTransfer(rewardsToken, tokenOwner, unclaimedRewards);
 
         emit RewardsClaimed(tokenOwner, unclaimedRewards);
     }
