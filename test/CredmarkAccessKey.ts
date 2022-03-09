@@ -55,6 +55,17 @@ describe('Credmark Access Key', () => {
 
   it('should deploy', () => {});
 
+  describe('#setDaoTreasury', () => {
+    it('should only allow dao manager to set dao treasury', async () => {
+      await expect(credmarkAccessKey.setDaoTreasury(otherWallet.address)).to.be
+        .reverted;
+
+      await credmarkAccessKey
+        .connect(admin)
+        .setDaoTreasury(otherWallet.address);
+    });
+  });
+
   describe('#mint', () => {
     it('should mint', async () => {
       const tokenId = BigNumber.from(0);

@@ -12,6 +12,7 @@ import "./CredmarkAccessKeySubscriptionTier.sol";
 contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     using Counters for Counters.Counter;
 
+    bytes32 public constant DAO_MANAGER = keccak256("DAO_MANAGER");
     bytes32 public constant TIER_MANAGER = keccak256("TIER_MANAGER");
 
     IERC20 private cmk;
@@ -40,7 +41,12 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         credmarkDaoTreasury = _credmarkDaoTreasury;
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(DAO_MANAGER, msg.sender);
         _grantRole(TIER_MANAGER, msg.sender);
+    }
+
+    function setDaoTreasury(address _credmarkDaoTreasury) external onlyRole(DAO_MANAGER) {
+        credmarkDaoTreasury = _credmarkDaoTreasury;
     }
 
     function safeMint(address to) public returns (uint256 tokenId) {
