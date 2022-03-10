@@ -28,21 +28,10 @@ describe('Credmark Rewards', () => {
     },
     {
       tokenId: BigNumber.from(2),
-      amount: BigNumber.from(3).mul(BigNumber.from(10).pow(18)),
-    },
-    {
-      tokenId: BigNumber.from(3),
-      amount: BigNumber.from(4).mul(BigNumber.from(10).pow(18)),
-    },
-    {
-      tokenId: BigNumber.from(4),
-      amount: BigNumber.from(5).mul(BigNumber.from(10).pow(18)),
-    },
-    {
-      tokenId: BigNumber.from(5),
-      amount: BigNumber.from(50).mul(1e6).mul(BigNumber.from(10).pow(18)),
-    },
+      amount: BigNumber.from(3).mul(BigNumber.from(10).pow(19)),
+    }
   ];
+  
 
   const encodeLeaf = (leaf: { tokenId: BigNumber; amount: BigNumber }) =>
     utils.keccak256(
@@ -87,10 +76,11 @@ describe('Credmark Rewards', () => {
   describe('#deploy', () => {
     it('should deploy', () => {});
   });
-
+  
   describe('#setMerkleRoot', () => {
     it('should allow setting root', async () => {
       const root = merkleTree.getHexRoot();
+    
       await credmarkRewards.connect(admin).setMerkleRoot(root);
 
       const newRoot = await credmarkRewards.merkleRoot();
@@ -112,6 +102,9 @@ describe('Credmark Rewards', () => {
   });
 
   describe('#claimRewards', () => {
+
+    const root = '0x51074892d6d709b0fb13afa145c3050f94737c11366a7efd42e67ff53e41bcc5'; // from ipfs    
+    
     it('should allow claiming rewards', async () => {
       await cmk
         .connect(admin)
@@ -130,8 +123,9 @@ describe('Credmark Rewards', () => {
 
       await credmarkRewards
         .connect(admin)
-        .setMerkleRoot(merkleTree.getHexRoot());
+        .setMerkleRoot(root);
 
+        console.log(leaves);
       for (const leaf of leaves) {
         const tokenOwner = await nft.ownerOf(leaf.tokenId);
         await expect(
@@ -158,7 +152,7 @@ describe('Credmark Rewards', () => {
 
       await credmarkRewards
         .connect(admin)
-        .setMerkleRoot(merkleTree.getHexRoot());
+        .setMerkleRoot(root);
 
       const leaf = leaves[0];
       await expect(
