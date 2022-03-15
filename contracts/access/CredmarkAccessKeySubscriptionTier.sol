@@ -77,12 +77,13 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         require(address(oracle) != address(0), "Oracle not set");
 
         lastGlobalDebt = getGlobalDebt();
+        lastGlobalDebtTimestamp = block.timestamp;
+
         uint256 cmkPrice = oracle.getPrice();
         uint256 cmkPriceDecimals = oracle.decimals();
         require(cmkPrice != 0, "CMK price is reported 0");
 
         debtPerSecond = (monthlyFeeUsdWei * 10**cmkPriceDecimals) / (cmkPrice * SECONDS_PER_MONTH);
-        lastGlobalDebtTimestamp = block.timestamp;
 
         emit GlobalDebtUpdated();
     }

@@ -7,9 +7,9 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/IRewardsPool.sol";
 
 struct RecipientInfo {
-    address addr;
+    address account;
     uint256 multiplier;
-    uint256 startTime;
+    uint256 _effectiveBalance; // Only for internal use
 }
 
 contract RewardsPool is IRewardsPool, Ownable {
@@ -24,9 +24,7 @@ contract RewardsPool is IRewardsPool, Ownable {
 
     event PoolStarted();
     event EmissionRateChanged(uint256 emissionRate);
-    event RewardsIssued(address recipient, uint256 amount);
-
-    mapping(address => uint256) private _rewards;
+    event RewardsIssued(address indexed recipient, uint256 amount);
 
     constructor(IERC20 _rewardsToken) {
         rewardsToken = _rewardsToken;
@@ -57,8 +55,14 @@ contract RewardsPool is IRewardsPool, Ownable {
         emit EmissionRateChanged(emissionRate);
     }
 
-    function addRecipient(address recipient, uint256 multiplier) external onlyOwner {
-        recipients.push(RecipientInfo({addr: recipient, multiplier: multiplier, startTime: _now()}));
+    function addRecipient(address account, uint256 multiplier) external onlyOwner {
+        /**
+         * Issuing rewards to update `lastRewardTime`.
+         * Otherwise we will need to maintain recipient addition time for
+         * effectiveBalance (multiplier * balance) computation
+         */
+        issueRewards();
+        recipients.push(RecipientInfo({account: account, multiplier: multiplier, _effectiveBalance: 0}));
     }
 
     function getLastRewardTime() external view returns (uint256) {
@@ -70,30 +74,29 @@ contract RewardsPool is IRewardsPool, Ownable {
             return;
         }
 
-        bool _rewardsAvailable = false;
-        for (uint256 i = 0; i < recipients.length; i++) {
-            RecipientInfo memory _recipientInfo = recipients[i];
-            uint256 rewardsAmount = unissuedRewards(_recipientInfo.addr);
-            if (rewardsAmount > 0) {
-                _rewards[_recipientInfo.addr] = rewardsAmount;
-                _rewardsAvailable = true;
-            }
+        uint256 availableRewards = totalUnissuedRewards();
+        lastRewardTime = _now();
+
+        if (availableRewards == 0 || recipients.length == 0) {
+            return;
         }
 
-        lastRewardTime = _now();
-        if (_rewardsAvailable == false) {
+        uint256 factor = 0;
+        for (uint256 i = 0; i < recipients.length; i++) {
+            recipients[i]._effectiveBalance = recipients[i].multiplier * rewardsToken.balanceOf(recipients[i].account);
+            factor += recipients[i]._effectiveBalance;
+        }
+
+        if (factor == 0) {
             return;
         }
 
         for (uint256 i = 0; i < recipients.length; i++) {
-            address to = recipients[i].addr;
-            uint256 rewardsAmount = _rewards[to];
+            uint256 rewardsAmount = (availableRewards * recipients[i]._effectiveBalance) / factor;
             if (rewardsAmount > 0) {
-                SafeERC20.safeTransfer(rewardsToken, to, rewardsAmount);
-                emit RewardsIssued(to, rewardsAmount);
+                SafeERC20.safeTransfer(rewardsToken, recipients[i].account, rewardsAmount);
+                emit RewardsIssued(recipients[i].account, rewardsAmount);
             }
-
-            delete _rewards[to];
         }
     }
 
@@ -105,33 +108,25 @@ contract RewardsPool is IRewardsPool, Ownable {
         rewardsAmount = emissionRate * (_now() - lastRewardTime);
     }
 
-    function unissuedRewards(address recipient) public view override returns (uint256) {
+    function unissuedRewards(address recipientAccount) public view override returns (uint256) {
         uint256 availableRewards = totalUnissuedRewards();
         if (availableRewards == 0 || recipients.length == 0) {
             return 0;
         }
 
-        RecipientInfo memory recipientInfo = RecipientInfo({addr: address(0), multiplier: 0, startTime: 0});
-        uint256 currentTime = _now();
+        uint256 recipientMultiplier;
         uint256 sum = 0;
         for (uint256 i = 0; i < recipients.length; i++) {
-            RecipientInfo memory _recipientInfo = recipients[i];
-            uint256 _startTime = _recipientInfo.startTime > lastRewardTime ? _recipientInfo.startTime : lastRewardTime;
-            sum += _recipientInfo.multiplier * (currentTime - _startTime) * rewardsToken.balanceOf(_recipientInfo.addr);
+            sum += recipients[i].multiplier * rewardsToken.balanceOf(recipients[i].account);
 
-            if (_recipientInfo.addr == recipient) {
-                recipientInfo = _recipientInfo;
+            if (recipients[i].account == recipientAccount) {
+                recipientMultiplier = recipients[i].multiplier;
             }
         }
 
-        require(recipientInfo.addr != address(0), "Invalid recipient");
+        require(recipientMultiplier > 0, "Invalid recipient");
         if (sum > 0) {
-            uint256 startTime = recipientInfo.startTime > lastRewardTime ? recipientInfo.startTime : lastRewardTime;
-            return
-                (recipientInfo.multiplier *
-                    (currentTime - startTime) *
-                    rewardsToken.balanceOf(recipientInfo.addr) *
-                    availableRewards) / sum;
+            return (availableRewards * recipientMultiplier * rewardsToken.balanceOf(recipientAccount)) / sum;
         }
 
         return 0;
