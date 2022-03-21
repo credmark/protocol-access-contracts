@@ -10,8 +10,16 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "../interfaces/IPriceOracle.sol";
 import "./CredmarkAccessKeySubscriptionTier.sol";
 
+struct TokenInfo {
+    address subscription;
+    uint256 subscribedAt;
+    uint256 debtDiscount;
+    uint256 cmkAmount;
+}
+
 contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     using Counters for Counters.Counter;
+    using SafeERC20 for IERC20;
 
     bytes32 public constant DAO_MANAGER = keccak256("DAO_MANAGER");
     bytes32 public constant TIER_MANAGER = keccak256("TIER_MANAGER");
@@ -22,13 +30,9 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     Counters.Counter private _tokenIdCounter;
 
     CredmarkAccessKeySubscriptionTier[] public supportedTiers;
-    mapping(address => bool) public supportedTierAddresses;
+    mapping(address => bool) private _supportedTierAddresses;
 
-    mapping(uint256 => address) public tokenSubscription;
-    mapping(uint256 => uint256) public tokenSubscriptionTimestamp;
-    mapping(uint256 => uint256) public tokenDebtDiscount;
-
-    mapping(uint256 => uint256) public cmkAmount;
+    mapping(uint256 => TokenInfo) public tokenInfo;
     uint256 public totalCmkStaked;
 
     event SubscriptionTierCreated(address subscriptionTierAddress);
@@ -53,18 +57,19 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     function safeMint(address to) public returns (uint256 tokenId) {
         tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
+        tokenInfo[tokenId] = TokenInfo({subscription: address(0), subscribedAt: 0, debtDiscount: 0, cmkAmount: 0});
         _safeMint(to, tokenId);
     }
 
     function fund(uint256 tokenId, uint256 amount) public {
-        require(tokenSubscription[tokenId] != address(0), "Not subscribed");
+        require(tokenInfo[tokenId].subscription != address(0), "Not subscribed");
 
-        SafeERC20.safeTransferFrom(cmk, msg.sender, address(this), amount);
-        cmk.approve(tokenSubscription[tokenId], amount);
-        cmkAmount[tokenId] += amount;
+        cmk.safeTransferFrom(msg.sender, address(this), amount);
+        cmk.approve(tokenInfo[tokenId].subscription, amount);
+        tokenInfo[tokenId].cmkAmount += amount;
         totalCmkStaked += amount;
 
-        CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).stake(amount);
+        CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).stake(amount);
 
         emit TokenFunded(tokenId, amount);
     }
@@ -91,7 +96,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         tierAddress = address(newTier);
 
         supportedTiers.push(newTier);
-        supportedTierAddresses[tierAddress] = true;
+        _supportedTierAddresses[tierAddress] = true;
 
         emit SubscriptionTierCreated(tierAddress);
     }
@@ -103,29 +108,28 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     function burn(uint256 tokenId) external {
         require(_isApprovedOrOwner(msg.sender, tokenId), "Approval required");
         require(
-            tokenSubscription[tokenId] == address(0) ||
-                tokenSubscriptionTimestamp[tokenId] == 0 ||
-                block.timestamp - tokenSubscriptionTimestamp[tokenId] >=
-                CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).lockupPeriodSeconds(),
+            tokenInfo[tokenId].subscription == address(0) ||
+                tokenInfo[tokenId].subscribedAt == 0 ||
+                block.timestamp - tokenInfo[tokenId].subscribedAt >=
+                CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).lockupPeriodSeconds(),
             "Minimum lockup period"
         );
 
         uint256 _debt = debt(tokenId);
-        uint256 _cmkAmount = (CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).withdrawalAmount(
+        uint256 _cmkAmount = (CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).withdrawalAmount(
             address(this)
-        ) * cmkAmount[tokenId]) / totalCmkStaked;
+        ) * tokenInfo[tokenId].cmkAmount) / totalCmkStaked;
 
         require(_debt <= _cmkAmount, "Access Key is not solvent");
 
-        uint256 unstakedAmount = CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).unstake(
-            cmkAmount[tokenId]
+        uint256 unstakedAmount = CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).unstake(
+            tokenInfo[tokenId].cmkAmount
         );
 
-        delete cmkAmount[tokenId];
-        delete tokenDebtDiscount[tokenId];
+        delete tokenInfo[tokenId];
 
-        SafeERC20.safeTransfer(cmk, ownerOf(tokenId), unstakedAmount - _debt);
-        SafeERC20.safeTransfer(cmk, credmarkDaoTreasury, cmk.balanceOf(address(this)));
+        cmk.safeTransfer(ownerOf(tokenId), unstakedAmount - _debt);
+        cmk.safeTransfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
 
         _burn(tokenId);
 
@@ -134,25 +138,25 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
 
     function subscribe(uint256 tokenId, address subscription) public {
         require(_isApprovedOrOwner(msg.sender, tokenId) || hasRole(TIER_MANAGER, msg.sender), "Approval required");
-        require(supportedTierAddresses[subscription] == true, "Unsupported subscription");
+        require(_supportedTierAddresses[subscription] == true, "Unsupported subscription");
         require(
             CredmarkAccessKeySubscriptionTier(subscription).subscribable() == true || hasRole(TIER_MANAGER, msg.sender),
             "Tier is not subscribable"
         );
         require(
-            tokenSubscriptionTimestamp[tokenId] == 0 ||
-                block.timestamp - tokenSubscriptionTimestamp[tokenId] >=
+            tokenInfo[tokenId].subscribedAt == 0 ||
+                block.timestamp - tokenInfo[tokenId].subscribedAt >=
                 CredmarkAccessKeySubscriptionTier(subscription).lockupPeriodSeconds(),
             "Minimum lockup period"
         );
 
-        if (tokenSubscription[tokenId] != address(0x00)) {
+        if (tokenInfo[tokenId].subscription != address(0x00)) {
             resolveDebt(tokenId);
         }
 
-        tokenDebtDiscount[tokenId] = CredmarkAccessKeySubscriptionTier(subscription).getGlobalDebt();
-        tokenSubscription[tokenId] = subscription;
-        tokenSubscriptionTimestamp[tokenId] = block.timestamp;
+        tokenInfo[tokenId].debtDiscount = CredmarkAccessKeySubscriptionTier(subscription).getGlobalDebt();
+        tokenInfo[tokenId].subscription = subscription;
+        tokenInfo[tokenId].subscribedAt = block.timestamp;
 
         emit SubscriptionTierSubscribed(tokenId, subscription);
     }
@@ -164,50 +168,52 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     }
 
     function debt(uint256 tokenId) public view returns (uint256) {
-        if (tokenSubscription[tokenId] == address(0)) {
+        if (tokenInfo[tokenId].subscription == address(0)) {
             return 0;
         }
 
         return
-            CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).getGlobalDebt() - tokenDebtDiscount[tokenId];
+            CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).getGlobalDebt() -
+            tokenInfo[tokenId].debtDiscount;
     }
 
     function resolveDebt(uint256 tokenId) public {
         uint256 _debt = debt(tokenId);
-        tokenDebtDiscount[tokenId] += _debt;
+        tokenInfo[tokenId].debtDiscount += _debt;
 
-        CredmarkAccessKeySubscriptionTier tier = CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]);
-        uint256 _cmkAmount = (tier.withdrawalAmount(address(this)) * cmkAmount[tokenId]) / totalCmkStaked;
+        CredmarkAccessKeySubscriptionTier tier = CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription);
+        uint256 _cmkAmount = (tier.withdrawalAmount(address(this)) * tokenInfo[tokenId].cmkAmount) / totalCmkStaked;
 
-        uint256 cmkToUnstake = (_debt * cmkAmount[tokenId]) / _cmkAmount;
+        uint256 cmkToUnstake = (_debt * tokenInfo[tokenId].cmkAmount) / _cmkAmount;
 
-        require(cmkAmount[tokenId] >= cmkToUnstake, "Insufficient fund");
-        cmkAmount[tokenId] -= cmkToUnstake;
+        require(tokenInfo[tokenId].cmkAmount >= cmkToUnstake, "Insufficient fund");
+        tokenInfo[tokenId].cmkAmount -= cmkToUnstake;
+        totalCmkStaked -= cmkToUnstake;
 
         tier.unstake(cmkToUnstake);
-        SafeERC20.safeTransfer(cmk, credmarkDaoTreasury, cmk.balanceOf(address(this)));
+        cmk.safeTransfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
 
         emit DebtResolved(tokenId, _debt);
     }
 
     function liquidate(uint256 tokenId) external {
-        require(tokenSubscription[tokenId] != address(0), "Not subscribed");
+        require(tokenInfo[tokenId].subscription != address(0), "Not subscribed");
         uint256 _debt = debt(tokenId);
-        uint256 _cmkAmount = (CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).withdrawalAmount(
+        uint256 _cmkAmount = (CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).withdrawalAmount(
             address(this)
-        ) * cmkAmount[tokenId]) / totalCmkStaked;
+        ) * tokenInfo[tokenId].cmkAmount) / totalCmkStaked;
 
         require(_debt > _cmkAmount, "Access Key is solvent");
 
-        uint256 unstakedAmount = CredmarkAccessKeySubscriptionTier(tokenSubscription[tokenId]).unstake(
-            cmkAmount[tokenId]
+        uint256 unstakedAmount = CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).unstake(
+            tokenInfo[tokenId].cmkAmount
         );
 
-        tokenDebtDiscount[tokenId] += unstakedAmount;
-        totalCmkStaked -= cmkAmount[tokenId];
-        cmkAmount[tokenId] = 0;
+        tokenInfo[tokenId].debtDiscount += unstakedAmount;
+        totalCmkStaked -= tokenInfo[tokenId].cmkAmount;
+        tokenInfo[tokenId].cmkAmount = 0;
 
-        SafeERC20.safeTransfer(cmk, credmarkDaoTreasury, cmk.balanceOf(address(this)));
+        cmk.safeTransfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
 
         emit TokenLiquidated(tokenId, _debt);
     }

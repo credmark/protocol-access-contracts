@@ -258,9 +258,9 @@ describe('Credmark Access Key', () => {
 
       await credmarkAccessKey.fund(tokenId, fundAmount);
 
-      expect(await credmarkAccessKey.cmkAmount(tokenId)).to.be.equal(
-        fundAmount
-      );
+      expect(
+        (await credmarkAccessKey.tokenInfo(tokenId)).cmkAmount
+      ).to.be.equal(fundAmount);
     });
   });
 
@@ -434,7 +434,9 @@ describe('Credmark Access Key', () => {
 
       await credmarkAccessKey.burn(tokenId);
 
-      expect(fromWei(await credmarkAccessKey.cmkAmount(tokenId))).to.equal(0);
+      expect(
+        fromWei((await credmarkAccessKey.tokenInfo(tokenId)).cmkAmount)
+      ).to.equal(0);
 
       expect(fromWei(await cmk.balanceOf(credmarkDao.address))).to.equal(93);
       expect(fromWei(await cmk.balanceOf(wallet.address))).to.equal(906);
@@ -563,7 +565,9 @@ describe('Credmark Access Key', () => {
 
       await credmarkAccessKey.connect(otherWallet).liquidate(tokenId);
 
-      expect(await credmarkAccessKey.cmkAmount(tokenId)).to.equal(0);
+      expect((await credmarkAccessKey.tokenInfo(tokenId)).cmkAmount).to.equal(
+        0
+      );
       expect(await cmk.balanceOf(wallet.address)).to.equal(0);
       expect(await cmk.balanceOf(credmarkDao.address)).to.equal(fundAmount);
     });
@@ -939,7 +943,7 @@ describe('Credmark Access Key', () => {
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
         admin.address,
         oracle.address,
-        toWei(500_000),
+        toWei(1_000), // 1000 USD per month ~= 0.00154 CMK/s
         3600, // 1hour
         true
       );
@@ -957,7 +961,9 @@ describe('Credmark Access Key', () => {
 
       await cmk.connect(admin).transfer(rewardsPool.address, toWei(10_000_000));
 
-      await rewardsPool.connect(admin).start(toWei(1)); // 1 CMK per second
+      await rewardsPool
+        .connect(admin)
+        .start(toWei(1).div(BigNumber.from(1000))); // 0.001 CMK per second
       await rewardsPool
         .connect(admin)
         .addRecipient(subscriptionTierAddress, BigNumber.from(1));
@@ -975,28 +981,46 @@ describe('Credmark Access Key', () => {
       await ethers.provider.send('evm_increaseTime', [sevenDays]);
       await ethers.provider.send('evm_mine', []);
 
-      expect(await credmarkAccessKey.cmkAmount(0)).to.be.equal(fundAmount);
+      expect((await credmarkAccessKey.tokenInfo(0)).cmkAmount).to.be.equal(
+        fundAmount
+      );
+
       await credmarkAccessKey.resolveDebt(0);
 
-      const totalReward = BigNumber.from(sevenDays).mul(toWei(1));
-      const debt = toWei(
-        BigNumber.from(500_000).mul(7).mul(10000).div(30).div(cmkPrice)
+      // Rewards for seven days ~= 604 CMK
+      const totalReward = BigNumber.from(sevenDays).mul(
+        toWei(1).div(BigNumber.from(1000))
       );
 
-      const newBalance = fundAmount.sub(fundAmount.mul(debt).div(totalReward));
+      // Debt for seven days ~= 933 CMK
+      const debt = toWei(BigNumber.from(1_000))
+        .mul(7)
+        .mul(10000)
+        .div(30)
+        .div(cmkPrice);
 
-      expect(fromWei(await credmarkAccessKey.cmkAmount(0))).to.be.closeTo(
-        fromWei(newBalance),
-        1
-      );
+      // CMK unstaked to resolve 933 CMK debt ~= 581 CMK
+      const unstakedCmk = debt.mul(fundAmount).div(fundAmount.add(totalReward));
+
+      // Updated balance ~= 419 CMK
+      const newBalance = fundAmount.sub(unstakedCmk);
+
+      expect(
+        fromWei((await credmarkAccessKey.tokenInfo(0)).cmkAmount)
+      ).to.be.closeTo(fromWei(newBalance), 1);
 
       expect(fromWei(await cmk.balanceOf(credmarkDao.address))).to.be.closeTo(
         fromWei(debt),
         1
       );
 
-      await ethers.provider.send('evm_increaseTime', [sevenDays]);
+      await ethers.provider.send('evm_increaseTime', [sevenDays * 4]);
       await ethers.provider.send('evm_mine', []);
+
+      // After 28 days,
+      // debt would 933 * 4 ~= 3732
+      // rewards would be 604 * 4 ~= 2416
+      // So resolve debt should revert since debt < reward + balance(~419)
 
       await expect(credmarkAccessKey.resolveDebt(0)).to.be.revertedWith(
         'Insufficient fund'
@@ -1070,7 +1094,7 @@ describe('Credmark Access Key', () => {
 
       await credmarkAccessKey.connect(otherWallet).liquidate(0);
 
-      expect(await credmarkAccessKey.cmkAmount(0)).to.be.equal(0);
+      expect((await credmarkAccessKey.tokenInfo(0)).cmkAmount).to.be.equal(0);
 
       expect(fromWei(await cmk.balanceOf(credmarkDao.address))).to.be.closeTo(
         fromWei(fundAmount.add(totalReward)),
