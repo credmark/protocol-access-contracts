@@ -20,6 +20,8 @@ if (process.env.ACCOUNT_MNEMONIC) {
 const config: HardhatUserConfig = {
   gasReporter: {
     enabled: !!process.env.REPORT_GAS,
+    currency: 'USD',
+    coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
   networks: {
     hardhat: {
