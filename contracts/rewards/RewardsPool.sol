@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/IRewardsPool.sol";
@@ -12,7 +12,9 @@ struct RecipientInfo {
     uint256 balance; // Only for internal use
 }
 
-contract RewardsPool is IRewardsPool, Ownable {
+contract RewardsPool is IRewardsPool, AccessControl {
+    bytes32 public constant POOL_MANAGER = keccak256("POOL_MANAGER");
+
     IERC20 public rewardsToken;
 
     uint256 public lastRewardTime;
@@ -30,13 +32,15 @@ contract RewardsPool is IRewardsPool, Ownable {
 
     constructor(IERC20 _rewardsToken) {
         rewardsToken = _rewardsToken;
+
+        _grantRole(POOL_MANAGER, msg.sender);
     }
 
     function _now() internal view returns (uint256) {
         return block.timestamp;
     }
 
-    function start(uint256 _emissionRate) external onlyOwner {
+    function start(uint256 _emissionRate) external onlyRole(POOL_MANAGER) {
         require(!started, "Contract Already Started");
 
         lastRewardTime = _now();
@@ -47,7 +51,7 @@ contract RewardsPool is IRewardsPool, Ownable {
         emit PoolStarted();
     }
 
-    function setEmissionRate(uint256 newEmissionRate) external onlyOwner {
+    function setEmissionRate(uint256 newEmissionRate) external onlyRole(POOL_MANAGER) {
         if (emissionRate > 0) {
             issueRewards();
         }
@@ -57,13 +61,14 @@ contract RewardsPool is IRewardsPool, Ownable {
         emit EmissionRateChanged(emissionRate);
     }
 
-    function addRecipient(address account, uint256 multiplier) external onlyOwner {
+    function addRecipient(address account, uint256 multiplier) external onlyRole(POOL_MANAGER) {
         /**
          * Issuing rewards to update `lastRewardTime`.
          * Otherwise we will need to maintain recipient addition time for
          * effectiveBalance (multiplier * balance) computation
          */
         issueRewards();
+
         recipients[account] = RecipientInfo({account: account, multiplier: multiplier, balance: 0});
         recipientsAddresses.push(account);
 
