@@ -143,15 +143,23 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
             CredmarkAccessKeySubscriptionTier(subscription).subscribable() == true || hasRole(TIER_MANAGER, msg.sender),
             "Tier is not subscribable"
         );
-        require(
-            tokenInfo[tokenId].subscribedAt == 0 ||
-                block.timestamp - tokenInfo[tokenId].subscribedAt >=
-                CredmarkAccessKeySubscriptionTier(subscription).lockupPeriodSeconds(),
-            "Minimum lockup period"
-        );
 
-        if (tokenInfo[tokenId].subscription != address(0x00)) {
+        uint256 unstakedAmount;
+        if (tokenInfo[tokenId].subscription != address(0)) {
+            require(
+                block.timestamp - tokenInfo[tokenId].subscribedAt >=
+                    CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).lockupPeriodSeconds(),
+                "Minimum lockup period"
+            );
+
+            // Resolve debt
             resolveDebt(tokenId);
+
+            // Transfer any remaining amount to new subscription tier
+            CredmarkAccessKeySubscriptionTier tier = CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription);
+            unstakedAmount = tier.unstake(tokenInfo[tokenId].cmkAmount);
+            totalCmkStaked[tokenInfo[tokenId].subscription] -= tokenInfo[tokenId].cmkAmount;
+            tokenInfo[tokenId].cmkAmount = 0;
         }
 
         tokenInfo[tokenId].debtDiscount = CredmarkAccessKeySubscriptionTier(subscription).getGlobalDebt();
@@ -159,6 +167,12 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         tokenInfo[tokenId].subscribedAt = block.timestamp;
 
         emit SubscriptionTierSubscribed(tokenId, subscription);
+
+        if (unstakedAmount > 0) {
+            totalCmkStaked[tokenInfo[tokenId].subscription] += unstakedAmount;
+            cmk.approve(tokenInfo[tokenId].subscription, unstakedAmount);
+            CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).stake(unstakedAmount);
+        }
     }
 
     function mintSubscribeAndFund(uint256 amount, address subscription) external {
