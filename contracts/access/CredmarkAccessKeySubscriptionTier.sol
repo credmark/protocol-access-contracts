@@ -8,6 +8,8 @@ import "../interfaces/IPriceOracle.sol";
 import "../interfaces/IRewardsPool.sol";
 
 contract CredmarkAccessKeySubscriptionTier is AccessControl {
+    using SafeERC20 for IERC20;
+
     bytes32 public constant TIER_MANAGER = keccak256("TIER_MANAGER");
     uint256 private constant SECONDS_PER_MONTH = 2592000;
 
@@ -96,7 +98,7 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
 
         _totalStaked += amount;
         _balances[msg.sender] += amount;
-        SafeERC20.safeTransferFrom(stakingToken, msg.sender, address(this), amount);
+        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
         emit Staked(msg.sender, amount);
     }
 
@@ -117,7 +119,7 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         }
     }
 
-    function unstake(uint256 amount) external returns (uint256) {
+    function unstake(uint256 amount) external returns (uint256 unstakedAmount) {
         require(amount > 0, "Cannot unstake 0");
         require(_balances[msg.sender] >= amount, "Amount exceeds balance");
 
@@ -126,13 +128,11 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         }
 
         uint256 rewardsAmount = rewardsEarned(msg.sender, amount);
-        uint256 withdrawAmount = amount + rewardsAmount;
+        unstakedAmount = amount + rewardsAmount;
         _totalStaked -= amount;
         _balances[msg.sender] -= amount;
-        SafeERC20.safeTransfer(stakingToken, msg.sender, withdrawAmount);
+        stakingToken.safeTransfer(msg.sender, unstakedAmount);
 
         emit Unstaked(msg.sender, amount, rewardsAmount);
-
-        return withdrawAmount;
     }
 }
