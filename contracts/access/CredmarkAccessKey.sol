@@ -33,7 +33,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
     mapping(address => bool) private _supportedTierAddresses;
 
     mapping(uint256 => TokenInfo) public tokenInfo;
-    uint256 public totalCmkStaked;
+    mapping(address => uint256) public totalCmkStaked;
 
     event SubscriptionTierCreated(address subscriptionTierAddress);
     event SubscriptionTierSubscribed(uint256 tokenId, address subscriptionTierAddress);
@@ -67,7 +67,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         cmk.safeTransferFrom(msg.sender, address(this), amount);
         cmk.approve(tokenInfo[tokenId].subscription, amount);
         tokenInfo[tokenId].cmkAmount += amount;
-        totalCmkStaked += amount;
+        totalCmkStaked[tokenInfo[tokenId].subscription] += amount;
 
         CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).stake(amount);
 
@@ -118,7 +118,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         uint256 _debt = debt(tokenId);
         uint256 _cmkAmount = (CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).withdrawalAmount(
             address(this)
-        ) * tokenInfo[tokenId].cmkAmount) / totalCmkStaked;
+        ) * tokenInfo[tokenId].cmkAmount) / totalCmkStaked[tokenInfo[tokenId].subscription];
 
         require(_debt <= _cmkAmount, "Access Key is not solvent");
 
@@ -182,13 +182,14 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         tokenInfo[tokenId].debtDiscount += _debt;
 
         CredmarkAccessKeySubscriptionTier tier = CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription);
-        uint256 _cmkAmount = (tier.withdrawalAmount(address(this)) * tokenInfo[tokenId].cmkAmount) / totalCmkStaked;
+        uint256 _cmkAmount = (tier.withdrawalAmount(address(this)) * tokenInfo[tokenId].cmkAmount) /
+            totalCmkStaked[tokenInfo[tokenId].subscription];
 
         uint256 cmkToUnstake = (_debt * tokenInfo[tokenId].cmkAmount) / _cmkAmount;
 
         require(tokenInfo[tokenId].cmkAmount >= cmkToUnstake, "Insufficient fund");
         tokenInfo[tokenId].cmkAmount -= cmkToUnstake;
-        totalCmkStaked -= cmkToUnstake;
+        totalCmkStaked[tokenInfo[tokenId].subscription] -= cmkToUnstake;
 
         tier.unstake(cmkToUnstake);
         cmk.safeTransfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
@@ -201,7 +202,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         uint256 _debt = debt(tokenId);
         uint256 _cmkAmount = (CredmarkAccessKeySubscriptionTier(tokenInfo[tokenId].subscription).withdrawalAmount(
             address(this)
-        ) * tokenInfo[tokenId].cmkAmount) / totalCmkStaked;
+        ) * tokenInfo[tokenId].cmkAmount) / totalCmkStaked[tokenInfo[tokenId].subscription];
 
         require(_debt > _cmkAmount, "Access Key is solvent");
 
@@ -210,7 +211,7 @@ contract CredmarkAccessKey is ERC721, ERC721Enumerable, AccessControl {
         );
 
         tokenInfo[tokenId].debtDiscount += unstakedAmount;
-        totalCmkStaked -= tokenInfo[tokenId].cmkAmount;
+        totalCmkStaked[tokenInfo[tokenId].subscription] -= tokenInfo[tokenId].cmkAmount;
         tokenInfo[tokenId].cmkAmount = 0;
 
         cmk.safeTransfer(credmarkDaoTreasury, cmk.balanceOf(address(this)));
