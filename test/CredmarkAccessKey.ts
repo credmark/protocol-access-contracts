@@ -711,7 +711,7 @@ describe('Credmark Access Key', () => {
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
         admin.address,
         oracle.address,
-        toWei(100),
+        toWei(1_000),
         3600, // 1hour
         true
       );
@@ -723,7 +723,7 @@ describe('Credmark Access Key', () => {
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
         admin.address,
         oracle.address,
-        toWei(100),
+        toWei(1_000), // 1000 USD per month ~= 0.00154 CMK/s
         3600, // 1hour
         true
       );
@@ -740,7 +740,9 @@ describe('Credmark Access Key', () => {
 
       await cmk.connect(admin).transfer(rewardsPool.address, toWei(10_000_000));
 
-      await rewardsPool.connect(admin).start(toWei(1)); // 1 CMK per second
+      await rewardsPool
+        .connect(admin)
+        .start(toWei(1).div(BigNumber.from(1000))); // 0.001 CMK per second
 
       await rewardsPool
         .connect(admin)
@@ -784,26 +786,38 @@ describe('Credmark Access Key', () => {
       await ethers.provider.send('evm_increaseTime', [sevenDays]);
       await ethers.provider.send('evm_mine', []);
 
-      const debt = toWei(100).mul(7).mul(10000).div(30).div(cmkPrice);
-      const totalReward = BigNumber.from(sevenDays).mul(toWei(1));
+      // Rewards for seven days ~= 604 CMK
+      const totalReward = BigNumber.from(sevenDays).mul(
+        toWei(1).div(BigNumber.from(1000))
+      );
 
-      // 100$ for 30 days, so for 7 days,
-      // debt = 100$ * (7 days / 30 days) / (1 cmk per $)
+      // Debt for seven days ~= 933 CMK
+      const debt = toWei(BigNumber.from(1_000))
+        .mul(7)
+        .mul(10000)
+        .div(30)
+        .div(cmkPrice);
+
       expect(fromWei(await credmarkAccessKey.debt(0))).to.be.closeTo(
-        fromWei(debt), // ~93 CMK
+        fromWei(debt),
+        1
+      );
+
+      expect(fromWei(await credmarkAccessKey.debt(1))).to.be.closeTo(
+        fromWei(debt),
         1
       );
 
       await credmarkAccessKey.burn(0);
       expect(fromWei(await cmk.balanceOf(wallet.address))).to.be.closeTo(
         fromWei(fundAmount.add(totalReward.div(3)).sub(debt)),
-        200
+        1
       );
 
       await credmarkAccessKey.connect(otherWallet).burn(1);
       expect(fromWei(await cmk.balanceOf(otherWallet.address))).to.be.closeTo(
         fromWei(fundAmount.add(totalReward.mul(2).div(3)).sub(debt)),
-        200
+        1
       );
     });
 
@@ -828,7 +842,7 @@ describe('Credmark Access Key', () => {
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
         admin.address,
         oracle.address,
-        toWei(100),
+        toWei(1_000), // 1000 USD per month ~= 0.00154 CMK/s
         3600, // 1hour
         true
       );
@@ -840,7 +854,7 @@ describe('Credmark Access Key', () => {
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
         admin.address,
         oracle.address,
-        toWei(100),
+        toWei(1_000), // 1000 USD per month ~= 0.00154 CMK/s
         3600, // 1hour
         true
       );
@@ -857,7 +871,9 @@ describe('Credmark Access Key', () => {
 
       await cmk.connect(admin).transfer(rewardsPool.address, toWei(10_000_000));
 
-      await rewardsPool.connect(admin).start(toWei(1)); // 1 CMK per second
+      await rewardsPool
+        .connect(admin)
+        .start(toWei(1).div(BigNumber.from(1000))); // 0.001 CMK per second
 
       await rewardsPool
         .connect(admin)
@@ -901,29 +917,38 @@ describe('Credmark Access Key', () => {
       await ethers.provider.send('evm_increaseTime', [sevenDays]);
       await ethers.provider.send('evm_mine', []);
 
-      const debt = toWei(
-        BigNumber.from(100).mul(7).mul(10000).div(30).div(cmkPrice)
+      // Rewards for seven days ~= 604 CMK
+      const totalReward = BigNumber.from(sevenDays).mul(
+        toWei(1).div(BigNumber.from(1000))
       );
-      // 100$ for 30 days, so for 7 days,
-      // debt = 100$ * (7 days / 30 days) / (1 cmk per $)
+
+      // Debt for seven days ~= 933 CMK
+      const debt = toWei(BigNumber.from(1_000))
+        .mul(7)
+        .mul(10000)
+        .div(30)
+        .div(cmkPrice);
+
       expect(fromWei(await credmarkAccessKey.debt(0))).to.be.closeTo(
-        fromWei(debt), // ~93 CMK
+        fromWei(debt),
+        1
+      );
+
+      expect(fromWei(await credmarkAccessKey.debt(1))).to.be.closeTo(
+        fromWei(debt),
         1
       );
 
       await credmarkAccessKey.burn(0);
-      await credmarkAccessKey.connect(otherWallet).burn(1);
-
-      const totalReward = BigNumber.from(sevenDays).mul(toWei(1));
-
       expect(fromWei(await cmk.balanceOf(wallet.address))).to.be.closeTo(
-        fromWei(fundAmount.sub(debt).add(totalReward.div(3))),
-        1000
+        fromWei(fundAmount.add(totalReward.div(3)).sub(debt)),
+        1
       );
 
+      await credmarkAccessKey.connect(otherWallet).burn(1);
       expect(fromWei(await cmk.balanceOf(otherWallet.address))).to.be.closeTo(
-        fromWei(fundAmount.sub(debt).add(totalReward.mul(2).div(3))),
-        1000
+        fromWei(fundAmount.mul(2).add(totalReward.mul(2).div(3)).sub(debt)),
+        1
       );
     });
 

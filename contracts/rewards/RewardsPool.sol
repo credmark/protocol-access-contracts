@@ -9,7 +9,7 @@ import "../interfaces/IRewardsPool.sol";
 struct RecipientInfo {
     address account;
     uint256 multiplier;
-    uint256 _effectiveBalance; // Only for internal use
+    uint256 balance; // Only for internal use
 }
 
 contract RewardsPool is IRewardsPool, Ownable {
@@ -20,7 +20,9 @@ contract RewardsPool is IRewardsPool, Ownable {
 
     bool public started;
 
-    RecipientInfo[] public recipients;
+    mapping(address => RecipientInfo) public recipients;
+    address[] public recipientsAddresses;
+    uint256 private _factor;
 
     event PoolStarted();
     event EmissionRateChanged(uint256 emissionRate);
@@ -62,7 +64,31 @@ contract RewardsPool is IRewardsPool, Ownable {
          * effectiveBalance (multiplier * balance) computation
          */
         issueRewards();
-        recipients.push(RecipientInfo({account: account, multiplier: multiplier, _effectiveBalance: 0}));
+        recipients[account] = RecipientInfo({account: account, multiplier: multiplier, balance: 0});
+        recipientsAddresses.push(account);
+
+        _increaseBalance(account, rewardsToken.balanceOf(account));
+    }
+
+    function _increaseBalance(address recipientAddress, uint256 amount) private {
+        require(recipients[recipientAddress].account != address(0), "Invalid recipient");
+        _factor += amount * recipients[recipientAddress].multiplier;
+        recipients[recipientAddress].balance += amount;
+    }
+
+    function _decreaseBalance(address recipientAddress, uint256 amount) private {
+        require(recipients[recipientAddress].account != address(0), "Invalid recipient");
+        require(recipients[recipientAddress].balance >= amount, "Amount exceeds balance");
+        _factor -= amount * recipients[recipientAddress].multiplier;
+        recipients[recipientAddress].balance -= amount;
+    }
+
+    function increaseBalance(uint256 amount) external override {
+        _increaseBalance(msg.sender, amount);
+    }
+
+    function decreaseBalance(uint256 amount) external override {
+        _decreaseBalance(msg.sender, amount);
     }
 
     function getLastRewardTime() external view returns (uint256) {
@@ -75,27 +101,21 @@ contract RewardsPool is IRewardsPool, Ownable {
         }
 
         uint256 availableRewards = totalUnissuedRewards();
+        uint256 factor = _factor;
         lastRewardTime = _now();
-
-        if (availableRewards == 0 || recipients.length == 0) {
+        if (availableRewards == 0 || factor == 0) {
             return;
         }
 
-        uint256 factor = 0;
-        for (uint256 i = 0; i < recipients.length; i++) {
-            recipients[i]._effectiveBalance = recipients[i].multiplier * rewardsToken.balanceOf(recipients[i].account);
-            factor += recipients[i]._effectiveBalance;
-        }
+        for (uint256 i = 0; i < recipientsAddresses.length; i++) {
+            uint256 rewardsAmount = (availableRewards *
+                recipients[recipientsAddresses[i]].multiplier *
+                recipients[recipientsAddresses[i]].balance) / factor;
 
-        if (factor == 0) {
-            return;
-        }
-
-        for (uint256 i = 0; i < recipients.length; i++) {
-            uint256 rewardsAmount = (availableRewards * recipients[i]._effectiveBalance) / factor;
             if (rewardsAmount > 0) {
-                SafeERC20.safeTransfer(rewardsToken, recipients[i].account, rewardsAmount);
-                emit RewardsIssued(recipients[i].account, rewardsAmount);
+                _increaseBalance(recipientsAddresses[i], rewardsAmount);
+                SafeERC20.safeTransfer(rewardsToken, recipientsAddresses[i], rewardsAmount);
+                emit RewardsIssued(recipientsAddresses[i], rewardsAmount);
             }
         }
     }
@@ -108,25 +128,18 @@ contract RewardsPool is IRewardsPool, Ownable {
         rewardsAmount = emissionRate * (_now() - lastRewardTime);
     }
 
-    function unissuedRewards(address recipientAccount) public view override returns (uint256) {
+    function unissuedRewards(address recipientAddress) public view override returns (uint256) {
+        require(recipients[recipientAddress].account != address(0), "Invalid recipient");
+
         uint256 availableRewards = totalUnissuedRewards();
-        if (availableRewards == 0 || recipients.length == 0) {
+        if (availableRewards == 0) {
             return 0;
         }
 
-        uint256 recipientMultiplier;
-        uint256 sum = 0;
-        for (uint256 i = 0; i < recipients.length; i++) {
-            sum += recipients[i].multiplier * rewardsToken.balanceOf(recipients[i].account);
-
-            if (recipients[i].account == recipientAccount) {
-                recipientMultiplier = recipients[i].multiplier;
-            }
-        }
-
-        require(recipientMultiplier > 0, "Invalid recipient");
-        if (sum > 0) {
-            return (availableRewards * recipientMultiplier * rewardsToken.balanceOf(recipientAccount)) / sum;
+        if (_factor > 0) {
+            return
+                (availableRewards * recipients[recipientAddress].multiplier * recipients[recipientAddress].balance) /
+                _factor;
         }
 
         return 0;

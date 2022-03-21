@@ -26,7 +26,7 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
     IRewardsPool public rewardsPool;
 
     uint256 private _totalStaked;
-    mapping(address => uint256) private _balances;
+    mapping(address => uint256) private _stakedAmount;
 
     event Staked(address indexed user, uint256 amount);
     event Unstaked(address indexed user, uint256 amount, uint256 rewardAmount);
@@ -97,23 +97,30 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         }
 
         _totalStaked += amount;
-        _balances[msg.sender] += amount;
+        _stakedAmount[msg.sender] += amount;
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+        if (address(rewardsPool) != address(0)) {
+            rewardsPool.increaseBalance(amount);
+        }
+
         emit Staked(msg.sender, amount);
     }
 
     function balanceOf(address account) external view returns (uint256) {
-        return _balances[account];
+        return _stakedAmount[account];
     }
 
-    function rewardsEarned(address account, uint256 amount) public view returns (uint256) {
-        return
-            ((((_balances[account] * stakingToken.balanceOf(address(this))) / _totalStaked) - _balances[account]) *
-                amount) / _balances[account];
+    function _issuedRewards(address account, uint256 amount) private view returns (uint256 issuedRewardsForAmount) {
+        // Any amount of staking token that is transferred outside of staking
+        // to this address is considered reward. Rewards are distributed proportional
+        // to amount staked. So balance+rewards for an account would be calculated as follows:
+        uint256 balanceWithRewards = (_stakedAmount[account] * stakingToken.balanceOf(address(this))) / _totalStaked;
+        uint256 rewards = balanceWithRewards - _stakedAmount[account];
+        issuedRewardsForAmount = (rewards * amount) / _stakedAmount[account];
     }
 
     function withdrawalAmount(address account) external view returns (uint256 amount) {
-        amount = _balances[account] + rewardsEarned(account, _balances[account]);
+        amount = _stakedAmount[account] + _issuedRewards(account, _stakedAmount[account]);
         if (address(rewardsPool) != address(0)) {
             amount += rewardsPool.unissuedRewards(address(this));
         }
@@ -121,17 +128,20 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
 
     function unstake(uint256 amount) external returns (uint256 unstakedAmount) {
         require(amount > 0, "Cannot unstake 0");
-        require(_balances[msg.sender] >= amount, "Amount exceeds balance");
+        require(_stakedAmount[msg.sender] >= amount, "Amount exceeds balance");
 
         if (address(rewardsPool) != address(0)) {
             rewardsPool.issueRewards();
         }
 
-        uint256 rewardsAmount = rewardsEarned(msg.sender, amount);
+        uint256 rewardsAmount = _issuedRewards(msg.sender, amount);
         unstakedAmount = amount + rewardsAmount;
         _totalStaked -= amount;
-        _balances[msg.sender] -= amount;
+        _stakedAmount[msg.sender] -= amount;
         stakingToken.safeTransfer(msg.sender, unstakedAmount);
+        if (address(rewardsPool) != address(0)) {
+            rewardsPool.decreaseBalance(unstakedAmount);
+        }
 
         emit Unstaked(msg.sender, amount, rewardsAmount);
     }
