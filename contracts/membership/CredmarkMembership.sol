@@ -5,55 +5,100 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/IPriceOracle.sol";
-import "../interfaces/IRewardsPool.sol";
 import "./CredmarkMembershipToken.sol";
 import "./CredmarkMembershipTier.sol";
+import "./CredmarkMembershipRegistry.sol";
 
 
 contract CredmarkMembership is AccessControl {
     using SafeERC20 for IERC20;
 
-    bytes32 public constant MEMBERSHIP_MANAGER = keccak256("MEMBERSHIP_MANAGER");
-    
-    CredmarkMembershipTier[] public tiers;
-    CredmarkMembershipToken public membershipToken;
-    IRewardsPool public rewardsPool;
-    address public treasury;
+    bytes32 public constant ADMIN = keccak256("ADMIN");
 
-    event TierCreated(address TierAddress);
+    CredmarkMembershipRegistry private registry;
 
-    constructor(
-            IRewardsPool _rewardsPool, 
-            address _treasury) {
-
-        _grantRole(MEMBERSHIP_MANAGER, msg.sender);
-        treasury = _treasury;
-        rewardsPool = _rewardsPool;
-        membershipToken = new CredmarkMembershipToken();
+    constructor(CredmarkMembershipRegistry _registry) {
+        registry = _registry;
     }
 
-    function createTier(CredmarkMembershipTier.MembershipTierConfiguration calldata tierConfiguration) external onlyRole(MEMBERSHIP_MANAGER) {
-        CredmarkMembershipTier tier = new CredmarkMembershipTier(tierConfiguration);
-        tiers.push(tier);
+    function mint(address recipient, uint amount, CredmarkMembershipTier tier) external returns (uint) {
 
-        emit TierCreated(address(tier));
+        require(registry.tierExists(), "Unsupported Tier");
+        require(address(registry.membershipToken()) != address(0), "MembershipToken not initialized");
+        require(hasRole(ADMIN) || tier.subscribable(), "Tier not Subscribeable");
+
+        uint tokenId = registry.membershipToken().safeMint(recipient);
+        deposit(tokenId, amount);
+        registry.subscribe(tokenId);
     }
 
-    function tierCount() public view returns (uint) {
-        return tiers.length;
+    function deposit(uint tokenId, uint amount) public {
+        CredmarkMembershipTier tier = registry.subscription(tokenId);
+
+        require(address(tier)!= address(0), "Token Not Subscribed");
+
+        SafeERC20.safeTransferFrom(tier.baseToken(), msg.sender, address(tier), amount);
+        tier.deposit(tokenId, amount);
     }
 
-    function rebalanceRewards() external {
-        rewardsPool.rewardsPerSecond() / _totalShares;
-    }
+    function exit(uint tokenId) public {
+        require(isSolvent(), "Token is not Solvent");
+        address owner = registry.membershipToken.ownerOf(tokenId);
+        require(owner == msg.sender, "Must be owner of token to exit");
 
-    function totalShares() external view returns (uint){
-        uint _totalShares;
-        for(uint i =0; i<tierCount(); i++){
-            (uint multiplier,,,,,,,) = tiers[i].config();
-            _totalShares += tiers[i].totalDeposits() * multiplier; 
+        CredmarkMembershipTier tier = registry.subscription(tokenId);
+
+        (uint256 exitDeposits, uint256 exitRewards, uint256 exitFees) = tier.exit(tokenId);
+
+        if (exitDeposits + exitRewards > exitFees) {
+            registry.membershipToken.burn(tokenId);
+            SafeERC20.safeTransferFrom(tier.baseToken(), address(tier), owner, exitDeposits + exitRewards - exitFees);
         }
-        return _totalShares;
     }
 
+    function liquidate(uint tokenId) public {
+        require(!isSolvent(tokenId), "Token is Solvent");
+
+        CredmarkMembershipTier tier = registry.subscription(tokenId);
+
+        (uint256 exitDeposits, uint256 exitRewards,) = tier.exit(tokenId);
+
+        SafeERC20.safeTransferFrom(tier.baseToken(), address(tier), registry.treasury, exitDeposits);
+        SafeERC20.safeTransferFrom(registry.rewardsTokenByTier(tier), address(registry.rewardsPoolByTier[tier]), registry.treasury, exitRewards);
+        
+        registry.membershipToken.burn(tokenId); 
+    }
+
+    function claim(uint tokenId, uint amount) public {
+        require(isSolvent(tokenId), "Token is not solvent");
+
+        address owner = registry.membershipToken.ownerOf(tokenId);
+        require(owner == msg.sender ||  hasRole(ADMIN), "Not approved to claim this token");
+
+        uint rewards = tier.rewards(tokenId);
+        require(rewards >= amount, "Amount is higher than rewards");
+
+        uint deposits = tier.deposits(tokenId);
+        uint balanceAfterClaim = deposits + tier.rewardsToBaseValue(tier.rewards(tokenId) - amount);
+        uint fees = tier.fees(tokenId);
+
+        if (fees < balanceAfterClaim) {
+            SafeERC20.safeTransferFrom(registry.rewardsTokenByTier(tier), registry.rewardsPoolByTier[tier], owner, amount);
+            tier.claim(tokenId, amount);
+        }
+    }
+
+    function isSolvent(uint tokenId) public view {
+        CredmarkMembershipTier tier = registry.subscription(tokenId);
+
+        uint deposits = tier.deposits(tokenId);
+        uint rewards = tier.rewards(tokenId);
+        uint fees = tier.fees(tokenId);
+        if (tier.baseToken() != registry.rewardsTokenByTier(tier)){
+            IPriceOracle baseOracle = registry.oracles[tier.baseToken()];
+            IPriceOracle rewardsOracle = registry.oracles[registry.rewardsTokenByTier(tier)];
+            rewards = rewards * rewardsOracle.getPrice() * (10**baseOracle.decimals()) / (baseOracle.getPrice() * (10**rewardsOracle.decimals()));
+        }
+        return deposits + rewards >= fees; 
+    }
 }
