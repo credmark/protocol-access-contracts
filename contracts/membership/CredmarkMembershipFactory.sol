@@ -20,8 +20,6 @@ contract CredmarkMembershipFactory is AccessControl {
         _setupRole(factoryManager, FACTORY_MANAGER);
         createRegistry();
     }
-    
-    // I don't think I set up membership anywhere... IDK
 
     function createMembershipToken() external onlyRole(FACTORY_MANAGER) {
         registry.setMembershipToken(new CredmarkMembershipToken());

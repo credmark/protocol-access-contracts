@@ -9,14 +9,13 @@ import "../interfaces/IRewardsPool.sol";
 import "./CredmarkMembershipToken.sol";
 import "./CredmarkMembershipTier.sol";
 import "./CredmarkMembershipRewardsPool.sol";
-import "./CredmarkMembership.sol";
-
+import "../oracle/TokenOracles.sol";
 
 contract CredmarkMembershipRegistry is AccessControl {
 
     bytes32 public constant REGISTRY_MANAGER = keccak256("REGISTRY_MANAGER");
 
-    mapping(IERC20 => IPriceOracle) public oracles;
+    TokenOracles public oracle;
     mapping(CredmarkMembershipTier => CredmarkMembershipRewardsPool) public rewardsPoolByTier;
     mapping(CredmarkMembershipRewardsPool => CredmarkMembershipTier[]) public tiersByRewardsPool;
     mapping(address => CredmarkMembershipTier) public subscriptions;
@@ -162,5 +161,12 @@ contract CredmarkMembershipRegistry is AccessControl {
 
     function tierCountForRewardsPool(CredmarkMembershipRewardsPool rewardsPool) external returns (uint) {
         return tiersByRewardsPool[rewardsPool].length;
+    }
+
+    function valueIn(uint amount, IERC20 ofToken, IERC20 inToken) external returns (uint value) {
+        IPriceOracle ofOracle = oracles[ofToken];
+        IPriceOracle inOracle = oracles[inToken];
+
+        value = amount * (ofOracle.price() * (10**(inOracle.decimals()))) / (inOracle.price() * (10**(ofOracle.decimals())));
     }
 }

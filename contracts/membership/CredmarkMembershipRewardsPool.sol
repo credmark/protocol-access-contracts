@@ -3,12 +3,15 @@ pragma solidity ^0.8.2;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/IPriceOracle.sol";
 import "./CredmarkMembershipRegistry.sol";
 import "./CredmarkMembershipTier.sol";
 
 
 contract CredmarkMembershipRewardsPool is AccessControl {
+    using SafeERC20 for IERC20;
+    
     IERC20 public rewardsToken;
     CredmarkMembershipRegistry private registry;
     bytes32 public constant REWARDS_MANAGER = keccak256("REWARDS_MANAGER");
@@ -18,8 +21,9 @@ contract CredmarkMembershipRewardsPool is AccessControl {
     uint public startTimestamp;
 
     mapping(address=>uint) public shares;
-    mapping(address=>uint) public globalRewardsSnapshots;    
-    uint public snapshotTimestamp;
+    mapping(address=>uint) public globalRewardsSnapshots;
+
+    uint public lastSnapshotTimestamp;
 
     constructor(
         IERC20 _rewardsToken, 
@@ -41,27 +45,33 @@ contract CredmarkMembershipRewardsPool is AccessControl {
         tokensPerSecond = _tokensPerSecond;
     }
 
-    function snapshot() external {
+    function snapshot() public {
+        require(block.timestamp >= lastSnapshotTimestamp, "ERROR:block.timestamp");
         uint tierCount = registry.tierCountForRewardsPool(address(this));
-        uint sharesSum = 0;
-
         for(uint i = 0; i < tierCount; i++){
             CredmarkMembershipTier tier =  registry.tiersByRewardsPool[address(this)][i];
-            share = tier.totalDeposits * tier.multiplier();
-            if (tier.baseToken() != rewardsToken){
+            globalRewardsSnapshots[tier] = globalTierRewards(tier);
+        }
+        lastSnapshotTimestamp = block.timestamp;
+    }
+
+    function updateTierRewards(CredmarkMembershipTier tier) public returns (uint256) {
+        require(registry.rewardsPools[tier] == address(this), "ERROR: Not subscribed");
+        snapshot();
+        
+        uint newShares = tier.totalDeposits * tier.multiplier();
+
+        if (tier.baseToken() != rewardsToken){
                 IPriceOracle baseOracle = registry.oracles[tier.baseToken()];
                 IPriceOracle rewardsOracle = registry.oracles[rewardsToken];
-                share = share * (baseOracle.getPrice() * (10**rewardsOracle.decimals())) / 
+                newShares = newShares * (baseOracle.getPrice() * (10**rewardsOracle.decimals())) / 
                     (rewardsOracle.getPrice() * (10**baseOracle.decimals()));
-            }
-            sharesSum += share;
-            globalRewardsSnapshots[tier] = globalTierRewards(tier);
-            shareSnapshots[tier] = share;
         }
-        totalShares = sharesSum;
+
+        uint newTotalShares = totalShares + newShares - shares[msg.sender];
     }
 
     function globalTierRewards(CredmarkMembershipTier tier) public returns (uint){
-        return  globalRewardsSnapshots[tier] + (shareSnapshots[tier] * (block.timestamp - snapshotTimestamp) * tokensPerSecond / totalShares);
+        return  globalRewardsSnapshots[tier] + (shares[tier] * (block.timestamp - lastSnapshotTimestamp) * tokensPerSecond / totalShares);
     }
 }
