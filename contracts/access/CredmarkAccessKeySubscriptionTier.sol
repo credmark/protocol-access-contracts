@@ -50,29 +50,46 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         updateGlobalDebt();
     }
 
-    function setMonthlyFeeUsd(uint256 newMonthlyFeeUsdWei) external onlyRole(TIER_MANAGER) {
+    function setMonthlyFeeUsd(uint256 newMonthlyFeeUsdWei)
+        external
+        onlyRole(TIER_MANAGER)
+    {
         monthlyFeeUsdWei = newMonthlyFeeUsdWei;
         updateGlobalDebt();
     }
 
-    function setPriceOracle(address newPriceOracle) external onlyRole(TIER_MANAGER) {
+    function setPriceOracle(address newPriceOracle)
+        external
+        onlyRole(TIER_MANAGER)
+    {
         oracle = IPriceOracle(newPriceOracle);
     }
 
-    function setLockupPeriod(uint256 newLockupPeriod) external onlyRole(TIER_MANAGER) {
+    function setLockupPeriod(uint256 newLockupPeriod)
+        external
+        onlyRole(TIER_MANAGER)
+    {
         lockupPeriodSeconds = newLockupPeriod;
     }
 
-    function setSubscribable(bool isSubscribable) external onlyRole(TIER_MANAGER) {
+    function setSubscribable(bool isSubscribable)
+        external
+        onlyRole(TIER_MANAGER)
+    {
         subscribable = isSubscribable;
     }
 
-    function setRewardsPool(address newRewardsPool) external onlyRole(TIER_MANAGER) {
+    function setRewardsPool(address newRewardsPool)
+        external
+        onlyRole(TIER_MANAGER)
+    {
         rewardsPool = IRewardsPool(newRewardsPool);
     }
 
     function getGlobalDebt() public view returns (uint256) {
-        return lastGlobalDebt + (debtPerSecond * (block.timestamp - lastGlobalDebtTimestamp));
+        return
+            lastGlobalDebt +
+            (debtPerSecond * (block.timestamp - lastGlobalDebtTimestamp));
     }
 
     function updateGlobalDebt() public {
@@ -85,7 +102,9 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         uint256 cmkPriceDecimals = oracle.decimals();
         require(cmkPrice != 0, "CMK price is reported 0");
 
-        debtPerSecond = (monthlyFeeUsdWei * 10**cmkPriceDecimals) / (cmkPrice * SECONDS_PER_MONTH);
+        debtPerSecond =
+            (monthlyFeeUsdWei * 10**cmkPriceDecimals) /
+            (cmkPrice * SECONDS_PER_MONTH);
 
         emit GlobalDebtUpdated();
     }
@@ -110,17 +129,28 @@ contract CredmarkAccessKeySubscriptionTier is AccessControl {
         return _stakedAmount[account];
     }
 
-    function _issuedRewards(address account, uint256 amount) private view returns (uint256 issuedRewardsForAmount) {
+    function _issuedRewards(address account, uint256 amount)
+        private
+        view
+        returns (uint256 issuedRewardsForAmount)
+    {
         // Any amount of staking token that is transferred outside of staking
         // to this address is considered reward. Rewards are distributed proportional
         // to amount staked. So balance+rewards for an account would be calculated as follows:
-        uint256 balanceWithRewards = (_stakedAmount[account] * stakingToken.balanceOf(address(this))) / _totalStaked;
+        uint256 balanceWithRewards = (_stakedAmount[account] *
+            stakingToken.balanceOf(address(this))) / _totalStaked;
         uint256 rewards = balanceWithRewards - _stakedAmount[account];
         issuedRewardsForAmount = (rewards * amount) / _stakedAmount[account];
     }
 
-    function withdrawalAmount(address account) external view returns (uint256 amount) {
-        amount = _stakedAmount[account] + _issuedRewards(account, _stakedAmount[account]);
+    function withdrawalAmount(address account)
+        external
+        view
+        returns (uint256 amount)
+    {
+        amount =
+            _stakedAmount[account] +
+            _issuedRewards(account, _stakedAmount[account]);
         if (address(rewardsPool) != address(0)) {
             amount += rewardsPool.unissuedRewards(address(this));
         }

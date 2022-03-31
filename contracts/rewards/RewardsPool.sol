@@ -51,7 +51,10 @@ contract RewardsPool is IRewardsPool, AccessControl {
         emit PoolStarted();
     }
 
-    function setEmissionRate(uint256 newEmissionRate) external onlyRole(POOL_MANAGER) {
+    function setEmissionRate(uint256 newEmissionRate)
+        external
+        onlyRole(POOL_MANAGER)
+    {
         if (emissionRate > 0) {
             issueRewards();
         }
@@ -61,7 +64,10 @@ contract RewardsPool is IRewardsPool, AccessControl {
         emit EmissionRateChanged(emissionRate);
     }
 
-    function addRecipient(address account, uint256 multiplier) external onlyRole(POOL_MANAGER) {
+    function addRecipient(address account, uint256 multiplier)
+        external
+        onlyRole(POOL_MANAGER)
+    {
         /**
          * Issuing rewards to update `lastRewardTime`.
          * Otherwise we will need to maintain recipient addition time for
@@ -69,21 +75,38 @@ contract RewardsPool is IRewardsPool, AccessControl {
          */
         issueRewards();
 
-        recipients[account] = RecipientInfo({account: account, multiplier: multiplier, balance: 0});
+        recipients[account] = RecipientInfo({
+            account: account,
+            multiplier: multiplier,
+            balance: 0
+        });
         recipientsAddresses.push(account);
 
         _increaseBalance(account, rewardsToken.balanceOf(account));
     }
 
-    function _increaseBalance(address recipientAddress, uint256 amount) private {
-        require(recipients[recipientAddress].account != address(0), "Invalid recipient");
+    function _increaseBalance(address recipientAddress, uint256 amount)
+        private
+    {
+        require(
+            recipients[recipientAddress].account != address(0),
+            "Invalid recipient"
+        );
         _factor += amount * recipients[recipientAddress].multiplier;
         recipients[recipientAddress].balance += amount;
     }
 
-    function _decreaseBalance(address recipientAddress, uint256 amount) private {
-        require(recipients[recipientAddress].account != address(0), "Invalid recipient");
-        require(recipients[recipientAddress].balance >= amount, "Amount exceeds balance");
+    function _decreaseBalance(address recipientAddress, uint256 amount)
+        private
+    {
+        require(
+            recipients[recipientAddress].account != address(0),
+            "Invalid recipient"
+        );
+        require(
+            recipients[recipientAddress].balance >= amount,
+            "Amount exceeds balance"
+        );
         _factor -= amount * recipients[recipientAddress].multiplier;
         recipients[recipientAddress].balance -= amount;
     }
@@ -119,13 +142,21 @@ contract RewardsPool is IRewardsPool, AccessControl {
 
             if (rewardsAmount > 0) {
                 _increaseBalance(recipientsAddresses[i], rewardsAmount);
-                SafeERC20.safeTransfer(rewardsToken, recipientsAddresses[i], rewardsAmount);
+                SafeERC20.safeTransfer(
+                    rewardsToken,
+                    recipientsAddresses[i],
+                    rewardsAmount
+                );
                 emit RewardsIssued(recipientsAddresses[i], rewardsAmount);
             }
         }
     }
 
-    function totalUnissuedRewards() public view returns (uint256 rewardsAmount) {
+    function totalUnissuedRewards()
+        public
+        view
+        returns (uint256 rewardsAmount)
+    {
         if (!started || emissionRate == 0 || lastRewardTime == 0) {
             return 0;
         }
@@ -133,8 +164,16 @@ contract RewardsPool is IRewardsPool, AccessControl {
         rewardsAmount = emissionRate * (_now() - lastRewardTime);
     }
 
-    function unissuedRewards(address recipientAddress) public view override returns (uint256) {
-        require(recipients[recipientAddress].account != address(0), "Invalid recipient");
+    function unissuedRewards(address recipientAddress)
+        public
+        view
+        override
+        returns (uint256)
+    {
+        require(
+            recipients[recipientAddress].account != address(0),
+            "Invalid recipient"
+        );
 
         uint256 availableRewards = totalUnissuedRewards();
         if (availableRewards == 0) {
@@ -143,8 +182,9 @@ contract RewardsPool is IRewardsPool, AccessControl {
 
         if (_factor > 0) {
             return
-                (availableRewards * recipients[recipientAddress].multiplier * recipients[recipientAddress].balance) /
-                _factor;
+                (availableRewards *
+                    recipients[recipientAddress].multiplier *
+                    recipients[recipientAddress].balance) / _factor;
         }
 
         return 0;

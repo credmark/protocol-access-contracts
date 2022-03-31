@@ -34,7 +34,7 @@ contract CredmarkMembershipTier is AccessControl {
     }
 
     bytes32 public constant TIER_MANAGER = keccak256("TIER_MANAGER");
-    
+
     MembershipTierConfiguration public config;
 
     Cursor private _feeCursor;
@@ -45,62 +45,82 @@ contract CredmarkMembershipTier is AccessControl {
     mapping(uint256 => MembershipState) private _memberships;
 
     event Deposited(uint256 tokenId, uint256 amount);
-    event Claimed(address indexed user, uint256 amount);
+    event Claimed(uint256 tokenId, uint256 amount);
     event Exited(uint256 tokenId);
 
     constructor(
-        MembershipTierConfiguration memory configuration, 
+        MembershipTierConfiguration memory configuration,
         CredmarkMembershipRegistry _registry,
-        address tierManager) {
-
+        address tierManager
+    ) {
         grantRole(TIER_MANAGER, tierManager);
 
-        SafeERC20.safeApprove(configuration.baseToken, _registry.membershipToken, configuration.baseToken.totalSupply());
+        SafeERC20.safeApprove(
+            configuration.baseToken,
+            address(_registry.membershipToken()),
+            configuration.baseToken.totalSupply()
+        );
         config = configuration;
         registry = _registry;
     }
 
-    function fees(uint256 tokenId) public override view returns (uint256) {
+    function fees(uint256 tokenId) public view returns (uint256) {
         return _globalFee() - _memberships[tokenId].feeCursorSnapshot;
     }
 
-    function deposits(uint256 tokenId) public override view returns (uint256) {
+    function deposits(uint256 tokenId) public view returns (uint256) {
         return _memberships[tokenId].deposited;
     }
 
     function rewards(uint256 tokenId) public view returns (uint256) {
-        return (_globalRewards() - _memberships[tokenId].rewardCursorSnapshot) * 
-            (deposits(tokenId) / totalDeposits) + _memberships[tokenId].unclaimedRewards; 
+        return
+            (_globalRewards() - _memberships[tokenId].rewardCursorSnapshot) *
+            (deposits(tokenId) / totalDeposits) +
+            _memberships[tokenId].unclaimedRewards;
     }
 
-    function rewardsValue(uint256 tokenId) public view returns(uint256) {
-        (uint price, uint8 decimals) = registry.oracle.getLatestRelative(config.baseToken,registry.rewardsPoolByTier[this].rewardsToken);
-        return rewards() * price / (10**decimals);
+    function rewardsValue(uint256 tokenId) public returns (uint256) {
+        (uint256 price, uint8 decimals) = registry
+            .tokenOracle()
+            .getLatestRelative(
+                config.baseToken,
+                registry.rewardsPoolByTier(this).rewardsToken()
+            );
+        return (rewards(tokenId) * price) / (10**decimals);
     }
 
     function _globalFee() internal view returns (uint256) {
-        return (block.timestamp - _feeCursor.timestamp) * _feeCursor.rate + _feeCursor.snapshot;
+        return
+            (block.timestamp - _feeCursor.timestamp) *
+            _feeCursor.rate +
+            _feeCursor.snapshot;
     }
 
     function _globalRewards() internal view returns (uint256) {
-        return registry.rewardsPoolByTier[this].globalTierRewards(address(this));
+        return registry.rewardsPoolByTier(this).globalTierRewards(this);
     }
 
-    function deposit(uint256 tokenId, uint256 amount) external onlyRole(TIER_MANAGER) {
-
+    function deposit(uint256 tokenId, uint256 amount)
+        external
+        onlyRole(TIER_MANAGER)
+    {
         totalDeposits += amount;
         _memberships[tokenId].deposited += amount;
         _memberships[tokenId].unclaimedRewards = rewards(tokenId);
         _memberships[tokenId].rewardCursorSnapshot = _globalRewards();
 
         if (_memberships[tokenId].lockupStart == 0) {
-        _memberships[tokenId].lockupStart = block.timestamp;
+            _memberships[tokenId].lockupStart = block.timestamp;
         }
 
         emit Deposited(tokenId, amount);
     }
 
-    function claim(uint256 tokenId, uint256 amount) external override onlyRole(TIER_MANAGER) returns (uint256 claimableRewards) {
+    function claim(uint256 tokenId, uint256 amount)
+        external
+        onlyRole(TIER_MANAGER)
+        returns (uint256 claimableRewards)
+    {
         claimableRewards = rewards(tokenId);
         _memberships[tokenId].unclaimedRewards = claimableRewards - amount;
         _memberships[tokenId].rewardCursorSnapshot = _globalRewards();
@@ -108,8 +128,16 @@ contract CredmarkMembershipTier is AccessControl {
         emit Claimed(tokenId, claimableRewards);
     }
 
-    function exit(uint256 tokenId) external override onlyRole(TIER_MANAGER) returns(uint256 exitDeposits, uint256 exitRewards, uint256 exitFees) {
-
+    function exit(uint256 tokenId)
+        external
+        onlyRole(TIER_MANAGER)
+        returns (
+            uint256 exitDeposits,
+            uint256 exitRewards,
+            uint256 exitFees,
+            uint256 exitRewardsValue
+        )
+    {
         exitDeposits = deposits(tokenId);
         exitRewards = rewards(tokenId);
         exitFees = fees(tokenId);
@@ -119,57 +147,69 @@ contract CredmarkMembershipTier is AccessControl {
 
         delete _memberships[tokenId];
 
-        Exited(tokenId);
+        emit Exited(tokenId);
     }
 
-    function snapshotFee() public override {
-
-        require(address(registry.oracles[config.baseToken]) != address(0), "BaseToken Oracle not set");
-        require(address(registry.oracles[config.feeToken]) != address(0), "FeeToken Oracle not set");    
-
-        IPriceOracle baseOracle = registry.oracles[config.baseToken];
-        IPriceOracle feeOracle = registry.oracles[config.feeToken];
-
+    function snapshotFee() public {
         _feeCursor.snapshot = _globalFee();
         _feeCursor.timestamp = block.timestamp;
-        (uint price, uint8 decimals) = registry.oracle.getLatestRelative(config.baseToken, config.feeToken);
-        _feeCursor.rate = config.feePerSecond * price / (10**decimals);
-
-        emit FeeCursorUpdated(_feeCursor);
+        (uint256 price, uint8 decimals) = registry
+            .tokenOracle()
+            .getLatestRelative(config.baseToken, config.feeToken);
+        _feeCursor.rate = (config.feePerSecond * price) / (10**decimals);
     }
 
-    function setFeeSeconds(uint256 newFeeSeconds) external override onlyRole(TIER_MANAGER) {
+    function setFeeSeconds(uint256 newFeeSeconds)
+        external
+        onlyRole(TIER_MANAGER)
+    {
         config.feePerSecond = newFeeSeconds;
         snapshotFee();
     }
 
-    function setLockupSeconds(uint256 newLockupPeriod) external override onlyRole(TIER_MANAGER) {
+    function setLockupSeconds(uint256 newLockupPeriod)
+        external
+        onlyRole(TIER_MANAGER)
+    {
         config.lockupSeconds = newLockupPeriod;
     }
 
-    function setSubscribable(bool isSubscribable) external override onlyRole(TIER_MANAGER) {
-        config.subscribable = isSubscribable;
+    function setSubscribable(bool subscribable)
+        external
+        onlyRole(TIER_MANAGER)
+    {
+        config.subscribable = subscribable;
     }
 
-    function setMultiplier(uint multiplier) external override onlyRole(TIER_MANAGER) {
-        config.multiplier = multiplier;
-        registry.rewardsPoolByTier[address(this)].snapshot();
+    function setMultiplier(uint256 newMultiplier)
+        external
+        onlyRole(TIER_MANAGER)
+    {
+        config.multiplier = newMultiplier;
+        registry.rewardsPoolByTier(this).snapshot();
     }
 
     function baseToken() external view returns (IERC20) {
         return config.baseToken;
     }
 
-    function subscribeable() external view returns (bool) {
+    function isSubscribable() external view returns (bool) {
         return config.subscribable;
     }
 
-    function multiplier() external view returns (uint) {
+    function multiplier() external view returns (uint256) {
         return config.multiplier;
     }
 
     function sweep() external {
-        require(config.baseToken.balanceOf(address(this)) > totalDeposits, "Nothing to sweep");
-        SafeERC20.safeTransfer(config.baseToken, registry.treasury, config.baseToken.balanceOf(address(this)) - totalDeposits);
+        require(
+            config.baseToken.balanceOf(address(this)) > totalDeposits,
+            "Nothing to sweep"
+        );
+        SafeERC20.safeTransfer(
+            config.baseToken,
+            registry.treasury(),
+            config.baseToken.balanceOf(address(this)) - totalDeposits
+        );
     }
 }

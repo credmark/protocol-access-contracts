@@ -37,7 +37,10 @@ contract CredmarkModel is ERC721, Pausable, ERC721Enumerable, AccessControl {
         _unpause();
     }
 
-    function safeMint(address to, string memory _slug) public onlyRole(MINTER_ROLE) {
+    function safeMint(address to, string memory _slug)
+        public
+        onlyRole(MINTER_ROLE)
+    {
         uint256 slugHash = getSlugHash(_slug);
 
         require(slugTokens[slugHash] == 0x0, "Slug already Exists");

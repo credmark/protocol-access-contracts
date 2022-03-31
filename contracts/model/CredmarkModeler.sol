@@ -41,21 +41,30 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
         _mintCost = cost;
     }
 
-    function setModelContract(address modelContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setModelContract(address modelContract)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         require(modelContract != address(0), "Model contract can not be null");
 
         _modelContract = CredmarkModel(modelContract);
         emit ModelContractSet(modelContract);
     }
 
-    function setMintToken(address mintToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMintToken(address mintToken)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         require(mintToken != address(0), "Mint token contract can not be null");
 
         _mintToken = IERC20(mintToken);
         emit MintTokenSet(mintToken);
     }
 
-    function setMintCost(uint256 mintCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMintCost(uint256 mintCost)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         require(mintCost != 0, "Mint cost can not be zero");
 
         _mintCost = mintCost;
@@ -77,7 +86,12 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
     function safeMint(address to) public onlyRole(MINTER_ROLE) {
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
-        SafeERC20.safeTransferFrom(_mintToken, _msgSender(), address(this), _mintCost);
+        SafeERC20.safeTransferFrom(
+            _mintToken,
+            _msgSender(),
+            address(this),
+            _mintCost
+        );
         _safeMint(to, tokenId);
 
         emit NFTMinted(tokenId);
@@ -97,7 +111,12 @@ contract CredmarkModeler is ERC721, Pausable, AccessControl {
 
     // The following functions are overrides required by Solidity.
 
-    function supportsInterface(bytes4 interfaceId) public view override(ERC721, AccessControl) returns (bool) {
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721, AccessControl)
+        returns (bool)
+    {
         return super.supportsInterface(interfaceId);
     }
 }

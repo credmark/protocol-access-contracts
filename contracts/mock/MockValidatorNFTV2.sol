@@ -25,6 +25,7 @@ contract MockValidatorNFTV2 is
     // different from v1
     event NFTMinted(uint256 tokenId);
     event ValidatorNFTContractUpdated();
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
 
@@ -56,7 +57,10 @@ contract MockValidatorNFTV2 is
         _unpause();
     }
 
-    function safeMint(address to, string memory uri) public onlyRole(MINTER_ROLE) {
+    function safeMint(address to, string memory uri)
+        public
+        onlyRole(MINTER_ROLE)
+    {
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
         _safeMint(to, tokenId);
@@ -75,7 +79,10 @@ contract MockValidatorNFTV2 is
 
     // The following functions are overrides required by Solidity.
 
-    function _burn(uint256 tokenId) internal override(ERC721Upgradeable, ERC721URIStorageUpgradeable) {
+    function _burn(uint256 tokenId)
+        internal
+        override(ERC721Upgradeable, ERC721URIStorageUpgradeable)
+    {
         super._burn(tokenId);
     }
 
@@ -97,11 +104,7 @@ contract MockValidatorNFTV2 is
         return super.supportsInterface(interfaceId);
     }
 
-    function customFunction ()
-        public
-        pure
-        returns  (bool)
-    {
+    function customFunction() public pure returns (bool) {
         return true;
     }
 }
