@@ -16,36 +16,32 @@ contract CredmarkMembershipRegistry is AccessControl {
     bytes32 public constant REGISTRY_MANAGER = keccak256("REGISTRY_MANAGER");
 
     TokenOracles public oracle;
-    mapping(CredmarkMembershipTier => CredmarkMembershipRewardsPool) public rewardsPoolByTier;
-    mapping(CredmarkMembershipRewardsPool => CredmarkMembershipTier[]) public tiersByRewardsPool;
-    mapping(address => CredmarkMembershipTier) public subscriptions;
     CredmarkMembershipToken public membershipToken;
     CredmarkMembershipTier[] public tiers;
     CredmarkMembershipRewardsPool[] public rewardsPools;
-    CredmarkMembership public membership;
+    mapping(address => bool) public contractExists;
 
     address public treasury;
 
+    mapping(uint => CredmarkMembershipTier) public subscriptions;
+
+    mapping(CredmarkMembershipTier => CredmarkMembershipRewardsPool) public rewardsPoolByTier;
+    mapping(CredmarkMembershipRewardsPool => CredmarkMembershipTier[]) public tiersByRewardsPool;
+
     constructor(address registryManager){
-        _setupRole(REGISTRY_MANAGER, msg.sender);
-        _setupRole(REGISTRY_MANAGER, registryManager);
+        grantRole(REGISTRY_MANAGER, msg.sender);
+        grantRole(REGISTRY_MANAGER, registryManager);
     }
 
     // TIERS //
 
     function tierExists(CredmarkMembershipTier tier) internal view {
-        bool _tierExists = false;
-
-        for (uint i = 0; i< tiers.length; i++) {
-            if (tiers[i] == tier) {
-                _tierExists = true;
-            }
-        }
-        return _tierExists;
+        return contractExists[address(tier)];
     }
 
     function addTier(CredmarkMembershipTier tier) external onlyRole(REGISTRY_MANAGER) {
         tiers.push(tier);
+        contractExists[address(tier)] = true;
     }
 
     function tierCount() external view {
@@ -53,6 +49,7 @@ contract CredmarkMembershipRegistry is AccessControl {
     }
 
     function removeTier(CredmarkMembershipTier tier) external onlyRole(REGISTRY_MANAGER) {
+
         for (uint i = 0; i<tiers.length; i++)
         {
             if (tiers[i] == tier){
@@ -70,56 +67,24 @@ contract CredmarkMembershipRegistry is AccessControl {
                 break;
             }
         }
+        delete contractExists[address(tier)];
     }
 
     // ORACLES //
 
-    function addOracle(IERC20 token, IPriceOracle oracle) external onlyRole(REGISTRY_MANAGER) {
-        require(!oracleExists(), "Oracle already exists.");
-        oracles[token].push(oracle);
-    }
-
-    function oracleExists(IPriceOracle oracle) internal view {
-        bool _oracleExists = false;
-
-        for (uint i = 0; i< oracles.length; i++) {
-            if (oracles[i] == oracle) {
-                _oracleExists = true;
-            }
-        }
-        return _oracleExists;
-    }
-
-    function removeOracle(IPriceOracle oracle) external onlyRole(REGISTRY_MANAGER) {
-        for (uint i = 0; i<oracles.length; i++)
-        {
-            if (oracles[i] == oracle){
-                delete oracles[i];
-                break;
-            }
-        }
-    }
-
-    function oraclesLength(IERC20 token) external view {
-        return oracles[token].length;
+    function addOracle(TokenOracles _tokenOracle) 
+        external 
+        onlyRole(REGISTRY_MANAGER) 
+    {
+        oracle = _tokenOracle;
     }
 
     // REWARDS POOLS //
 
-    function rewardsPoolExists(CredmarkMembershipRewardsPool rewardsPool) internal view {
-        bool _rewardsPoolExists = false;
-
-        for (uint i = 0; i< rewardsPools.length; i++) {
-            if (rewardsPools[i] == rewardsPool) {
-                _rewardsPoolExists = true;
-            }
-        }
-        return _rewardsPoolExists;
-    }
-
     function addRewardsPool(CredmarkMembershipRewardsPool rewardsPool) external onlyRole(REGISTRY_MANAGER) {
-        require(!rewardsPoolExists(), "RewardsPool already exists.");
+        require(!contractExists[address(rewardsPool)], "RewardsPool already exists.");
         rewardsPools.push(rewardsPool);
+        contractExists[address(rewardsPool)] = true;
     }
 
     function rewardsPoolsLength() external view {
@@ -127,8 +92,8 @@ contract CredmarkMembershipRegistry is AccessControl {
     }
 
     function setTierRewardsPool(CredmarkMembershipTier tier, CredmarkMembershipRewardsPool rewardsPool) external onlyRole(REGISTRY_MANAGER) {
-        require(tierExists(tier), "Tier doesn't Exist.");
-        require(rewardsPoolExists(rewardsPool),"RewardsPool doesn't Exist.");
+        require(contractExists[address(tier)], "Tier doesn't Exist.");
+        require(contractExists[address(rewardsPool)],"RewardsPool doesn't Exist.");
         rewardsPoolByTier[tier] = rewardsPool;
         tiersByRewardsPool[rewardsPool].push(tier);
     }
@@ -147,7 +112,7 @@ contract CredmarkMembershipRegistry is AccessControl {
     }
 
     function subscribe(uint tokenId, CredmarkMembershipTier tier) external onlyRole(REGISTRY_MANAGER) {
-        require(tierExists(tier), "Tier doesn't Exist.");
+        require(contractExists[address(tier)], "Tier doesn't Exist.");
         subscriptions[tokenId] = tier;
     }
 
@@ -161,12 +126,5 @@ contract CredmarkMembershipRegistry is AccessControl {
 
     function tierCountForRewardsPool(CredmarkMembershipRewardsPool rewardsPool) external returns (uint) {
         return tiersByRewardsPool[rewardsPool].length;
-    }
-
-    function valueIn(uint amount, IERC20 ofToken, IERC20 inToken) external returns (uint value) {
-        IPriceOracle ofOracle = oracles[ofToken];
-        IPriceOracle inOracle = oracles[inToken];
-
-        value = amount * (ofOracle.price() * (10**(inOracle.decimals()))) / (inOracle.price() * (10**(ofOracle.decimals())));
     }
 }

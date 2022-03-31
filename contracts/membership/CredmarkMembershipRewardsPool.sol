@@ -29,7 +29,7 @@ contract CredmarkMembershipRewardsPool is AccessControl {
         IERC20 _rewardsToken, 
         CredmarkMembershipRegistry _registry,
         address _membershipAddress) {
-            _setupRole(REWARDS_MANAGER, _membershipAddress);
+            grantRole(REWARDS_MANAGER, _membershipAddress);
             SafeERC20.safeApprove(_rewardsToken, _membershipAddress, _rewardsToken.totalSupply());
             rewardsToken = _rewardsToken;
             registry = _registry;
@@ -62,10 +62,9 @@ contract CredmarkMembershipRewardsPool is AccessControl {
         uint newShares = tier.totalDeposits * tier.multiplier();
 
         if (tier.baseToken() != rewardsToken){
-                IPriceOracle baseOracle = registry.oracles[tier.baseToken()];
-                IPriceOracle rewardsOracle = registry.oracles[rewardsToken];
-                newShares = newShares * (baseOracle.getPrice() * (10**rewardsOracle.decimals())) / 
-                    (rewardsOracle.getPrice() * (10**baseOracle.decimals()));
+            (uint price, uint decimals) = registry.oracle.getLatestRelative(tier.baseToken(), rewardsToken);
+            // ensure decimals ends up correct
+            newShares = newShares * price / (10**decimals);
         }
 
         uint newTotalShares = totalShares + newShares - shares[msg.sender];

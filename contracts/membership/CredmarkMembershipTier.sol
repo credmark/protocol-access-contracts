@@ -5,10 +5,9 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/IPriceOracle.sol";
-import "./ICredmarkMembershipTier.sol";
 import "./CredmarkMembershipRegistry.sol";
 
-contract CredmarkMembershipTier is AccessControl, ICredmarkMembershipTier {
+contract CredmarkMembershipTier is AccessControl {
     using SafeERC20 for IERC20;
 
     struct Cursor {
@@ -22,6 +21,7 @@ contract CredmarkMembershipTier is AccessControl, ICredmarkMembershipTier {
         uint256 unclaimedRewards;
         uint256 feeCursorSnapshot;
         uint256 rewardCursorSnapshot;
+        uint256 lockupStart;
     }
 
     struct MembershipTierConfiguration {
@@ -40,7 +40,7 @@ contract CredmarkMembershipTier is AccessControl, ICredmarkMembershipTier {
     Cursor private _feeCursor;
 
     uint256 public totalDeposits;
-    CredmarkMembershipRegistry registry;
+    CredmarkMembershipRegistry internal registry;
 
     mapping(uint256 => MembershipState) private _memberships;
 
@@ -50,12 +50,12 @@ contract CredmarkMembershipTier is AccessControl, ICredmarkMembershipTier {
 
     constructor(
         MembershipTierConfiguration memory configuration, 
-        CredmarkMembershipRegistry _registry) {
-        require(address(_registry.membership) != address(0));
+        CredmarkMembershipRegistry _registry,
+        address tierManager) {
 
-        _grantRole(TIER_MANAGER, _registry.membership);
+        grantRole(TIER_MANAGER, tierManager);
 
-        SafeERC20.safeApprove(configuration.baseToken, _registry.membership, configuration.baseToken.totalSupply());
+        SafeERC20.safeApprove(configuration.baseToken, _registry.membershipToken, configuration.baseToken.totalSupply());
         config = configuration;
         registry = _registry;
     }
@@ -70,15 +70,12 @@ contract CredmarkMembershipTier is AccessControl, ICredmarkMembershipTier {
 
     function rewards(uint256 tokenId) public view returns (uint256) {
         return (_globalRewards() - _memberships[tokenId].rewardCursorSnapshot) * 
-            (totalDeposits / deposits(tokenId)) + _memberships[tokenId].unclaimedRewards; 
+            (deposits(tokenId) / totalDeposits) + _memberships[tokenId].unclaimedRewards; 
     }
 
-    function rewardsToBaseValue(uint256 amount) public override view returns (uint256) {
-        IPriceOracle baseOracle = registry.oracles[config.baseToken];
-        IPriceOracle feeOracle = registry.oracles[config.feeToken];
-
-        return amount * baseOracle.getPrice() * (10**rewardsOracle.decimals()) / 
-            (rewardsOracle.getPrice() * (10**baseOracle.decimals()));
+    function rewardsValue(uint256 tokenId) public view returns(uint256) {
+        (uint price, uint8 decimals) = registry.oracle.getLatestRelative(config.baseToken,registry.rewardsPoolByTier[this].rewardsToken);
+        return rewards() * price / (10**decimals);
     }
 
     function _globalFee() internal view returns (uint256) {
@@ -86,7 +83,7 @@ contract CredmarkMembershipTier is AccessControl, ICredmarkMembershipTier {
     }
 
     function _globalRewards() internal view returns (uint256) {
-        return registry.globalTierRewards(address(this));
+        return registry.rewardsPoolByTier[this].globalTierRewards(address(this));
     }
 
     function deposit(uint256 tokenId, uint256 amount) external onlyRole(TIER_MANAGER) {
@@ -96,8 +93,8 @@ contract CredmarkMembershipTier is AccessControl, ICredmarkMembershipTier {
         _memberships[tokenId].unclaimedRewards = rewards(tokenId);
         _memberships[tokenId].rewardCursorSnapshot = _globalRewards();
 
-        if (_memberships[tokenId].subscribedAtTimestamp == 0) {
-            _memberships[tokenId].subscribedAtTimestamp = block.timestamp;
+        if (_memberships[tokenId].lockupStart == 0) {
+        _memberships[tokenId].lockupStart = block.timestamp;
         }
 
         emit Deposited(tokenId, amount);
@@ -135,14 +132,14 @@ contract CredmarkMembershipTier is AccessControl, ICredmarkMembershipTier {
 
         _feeCursor.snapshot = _globalFee();
         _feeCursor.timestamp = block.timestamp;
-        _feeCursor.rate = config.feePerSecond * feeOracle.getPrice() * (10**baseOracle.decimals()) / 
-            (baseOracle.getPrice() * (10**feeOracle.decimals()));
+        (uint price, uint8 decimals) = registry.oracle.getLatestRelative(config.baseToken, config.feeToken);
+        _feeCursor.rate = config.feePerSecond * price / (10**decimals);
 
         emit FeeCursorUpdated(_feeCursor);
     }
 
-    function setFeeSeconds(uint256 newFeeSecondsUsd) external override onlyRole(TIER_MANAGER) {
-        config.feePerSecond = newFeeSecondsUsd;
+    function setFeeSeconds(uint256 newFeeSeconds) external override onlyRole(TIER_MANAGER) {
+        config.feePerSecond = newFeeSeconds;
         snapshotFee();
     }
 

@@ -20,13 +20,14 @@ contract TokenOracles is AccessControl {
     }
 
     function setTokenOracle(IERC20 token, IPriceOracle oracle) 
-        public 
+        external 
         onlyRole(ORACLE_MANAGER) 
     {
         oracles[token] = oracle;
     }
 
-    function getLatest(IERC20 token) 
+    /* just a convenience function, delete if unneccessary */
+    function getLatestPrice(IERC20 token) 
         external 
         view 
         returns (uint price, uint8 decimals) 
@@ -78,7 +79,6 @@ contract ChainlinkPriceOracle is IPriceOracle {
         override 
         returns (uint) 
     {
-        require(address(_oracle) != address(0),"No oracle set");
         (,int latestPrice,,,) = _oracle.latestRoundData();
         require(latestPrice <= 0, "No data present");
         return uint(latestPrice);
@@ -90,7 +90,6 @@ contract ChainlinkPriceOracle is IPriceOracle {
         override 
         returns(uint8) 
     {
-        require(address(_oracle) != address(0), "ERROR: No oracle available.");
         return _oracle.decimals();
     }
 }
@@ -112,8 +111,11 @@ contract CmkUsdcTwapPriceOracle is IPriceOracle {
     constructor(address priceManager) 
     {
         grantRole(PRICE_MANAGER, priceManager);
+
+        //Fill the buffer with the instantaneous price
+        (uint160 sqrtPriceX96,,,,,,) = IUniswapV3Pool(uniswapV3Pool).slot0(timeRange);
         for(int i=0; i<BUFFER_LENGTH; i++) {
-            sample();
+            samples[i] = sqrtPriceX96;
         }
     }
 

@@ -13,9 +13,9 @@ contract MockCMK is ERC20, ERC20Burnable, ERC20Snapshot, AccessControl, Pausable
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     constructor() ERC20("Credmark", "CMK") ERC20Permit("Credmark") {
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setupRole(SNAPSHOT_ROLE, msg.sender);
-        _setupRole(PAUSER_ROLE, msg.sender);
+        grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        grantRole(SNAPSHOT_ROLE, msg.sender);
+        grantRole(PAUSER_ROLE, msg.sender);
         _mint(msg.sender, 100000000 * 10**decimals());
     }
 
