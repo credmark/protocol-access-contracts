@@ -20,8 +20,7 @@ contract CmkUsdcTwapPriceOracle is IPriceOracle, AccessControl {
     IUniswapV3Pool cmkUsdcPool =
         IUniswapV3Pool(0xF7a716E2df2BdE4D0BA7656c131b06b1Af68513c);
 
-    constructor(address univ3pool, uint8 oracleDecimals) {
-
+    constructor() {
         buffer = new uint256[](BUFFER_LENGTH);
 
         (uint160 sqrtPriceX96, , , , , , ) = cmkUsdcPool.slot0();

@@ -30,9 +30,7 @@ contract TokenOracles is AccessControl {
         view
         returns (uint256 price, uint8 decimals)
     {
-
         return (oracles[token].getPrice(), oracles[token].decimals());
-
     }
 
     function getLatestRelative(IERC20 _base, IERC20 _quote)

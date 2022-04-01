@@ -14,6 +14,7 @@ describe('Token Oracles', () => {
   let minterRole = ethers.utils.id('MINTER_ROLE');
   let ORACLE_MANAGER = ethers.utils.id('ORACLE_MANAGER');
   let DEFAULT_ADMIN_ROLE = ethers.utils.id('DEFAULT_ADMIN_ROLE');
+  let cmkAddress = "0x68CFb82Eacb9f198d508B514d898a403c449533E";
   const fixture = async () => {
     [deployer, oracleManager, alice, bob] = await ethers.getSigners();
     const tokenOraclesFactory = await ethers.getContractFactory(
@@ -32,7 +33,7 @@ describe('Token Oracles', () => {
     const cmkPriceOracleFactory = await ethers.getContractFactory(
         'CmkUsdcTwapPriceOracle'
     )
-    cmkOracle = (await cmkPriceOracleFactory.deploy(oracleManager.address)) as CmkUsdcTwapPriceOracle;
+    cmkOracle = (await cmkPriceOracleFactory.deploy()) as CmkUsdcTwapPriceOracle;
   });
 
   it('should construct', async () => {
@@ -41,14 +42,8 @@ describe('Token Oracles', () => {
 
   describe('#addOracles', () => {
     it('should be done by ORACLE_ROLE', async () => {
-        expect(await tokenOracles.connect(oracleManager).setTokenOracle("0x68CFb82Eacb9f198d508B514d898a403c449533E",cmkOracle.address))
-        console.log(await tokenOracles.getLatestPrice("0x68CFb82Eacb9f198d508B514d898a403c449533E").then(console.log))
-        });
-    });
-
-describe('#addOracles', () => {
-    it('should be able to fetch CMK Price', async () => {
-            
+        expect(console.log(await tokenOracles.connect(oracleManager).setTokenOracle(cmkAddress,cmkOracle.address))).eq(true);
+        expect(await tokenOracles.getLatestPrice(cmkAddress));
         });
     });
 });

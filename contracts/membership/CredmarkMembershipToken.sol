@@ -15,13 +15,11 @@ contract CredmarkMembershipToken is ERC721, ERC721Enumerable, AccessControl {
 
     Counters.Counter private _tokenIdCounter;
     CredmarkMembershipRegistry registry;
-    IERC20 internal cmk;
 
-    constructor(CredmarkMembershipRegistry _registry, IERC20 _cmk)
+    constructor(CredmarkMembershipRegistry _registry)
         ERC721("CredmarkMembershipToken", "cmkMembership")
     {
         registry = _registry;
-        cmk = _cmk;
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
@@ -78,10 +76,6 @@ contract CredmarkMembershipToken is ERC721, ERC721Enumerable, AccessControl {
             amount
         );
         tier.deposit(tokenId, amount);
-
-        CmkUsdcTwapPriceOracle(
-            address(registry.tokenOracle().getPriceOracle(cmk))
-        ).sample();
     }
 
     function burn(uint256 tokenId) public {
