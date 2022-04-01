@@ -2,7 +2,7 @@
 pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
@@ -26,17 +26,13 @@ contract TokenOracles is AccessControl {
 
     /* just a convenience function, delete if unneccessary */
     function getLatestPrice(ERC20 token)
-        external view
+        external 
+        view
         returns (uint256 price, uint8 decimals)
     {
-        (bool success, bytes memory priceData) = address(oracles[token]).staticcall(abi.encodeWithSignature("getPrice()"));
-        (, bytes memory decimalsData) = address(oracles[token]).staticcall(abi.encodeWithSignature("getPrice()"));
-        if(success) {
-            (uint latestPrice) = abi.decode(priceData, (uint));
-            (uint decimals) = abi.decode(priceData, (uint));
-            return (latestPrice, oracles[token].decimals());
-        }
-        require(success, "Contract call failed");
+
+        return (oracles[token].getPrice(), oracles[token].decimals());
+
     }
 
     function getLatestRelative(IERC20 _base, IERC20 _quote)
@@ -83,69 +79,3 @@ contract TokenOracles is AccessControl {
     }
 }
 
-contract ChainlinkPriceOracle is IPriceOracle {
-    AggregatorV3Interface internal _oracle;
-
-    constructor(AggregatorV3Interface oracle) {
-        _oracle = oracle;
-    }
-
-    function getPrice() public view override returns (uint256) {
-        (, int256 latestPrice, , , ) = _oracle.latestRoundData();
-        require(latestPrice <= 0, "No data present");
-        return uint256(latestPrice);
-    }
-
-    function decimals() public view override returns (uint8) {
-        return _oracle.decimals();
-    }
-}
-
-contract CmkUsdcTwapPriceOracle is IPriceOracle, AccessControl {
-    bytes32 public constant PRICE_MANAGER = keccak256("PRICE_MANAGER");
-
-    uint256 internal MIN_SAMPLE_LENGTH_S = 3600;
-    uint256 internal X96 = 0x1000000000000000000000000;
-    uint256 internal X192 = 0x1000000000000000000000000000000000000000000000000;
-    uint256 internal X192_DIV_TEN_20 = 0x2f394219248446baa23d2ec729af3d61;
-    uint256 internal BUFFER_LENGTH = 4;
-    uint256[] internal buffer;
-    uint256 internal lastSampleTimestamp;
-    uint256 internal lastSampleidx;
-
-    IUniswapV3Pool cmkUsdcPool =
-        IUniswapV3Pool(0xF7a716E2df2BdE4D0BA7656c131b06b1Af68513c);
-
-    constructor(address priceManager) {
-        _grantRole(PRICE_MANAGER, priceManager);
-        buffer = new uint256[](BUFFER_LENGTH);
-
-        //Fill the buffer with the instantaneous price
-        (uint160 sqrtPriceX96, , , , , , ) = cmkUsdcPool.slot0();
-        for (uint256 i = 0; i < BUFFER_LENGTH; i++) {
-            buffer[i] = sqrtPriceX96;
-        }
-    }
-
-    function sample() public {
-        if (block.timestamp > lastSampleTimestamp + MIN_SAMPLE_LENGTH_S) {
-            lastSampleidx = (lastSampleidx + 1) % BUFFER_LENGTH;
-            (uint160 sqrtPriceX96, , , , , , ) = cmkUsdcPool.slot0();
-            buffer[lastSampleidx] = sqrtPriceX96;
-            lastSampleTimestamp = block.timestamp;
-        }
-    }
-
-    function getPrice() public view override returns (uint256) {
-        address(this).staticcall(abi.encodeWithSignature("sample()"));
-        uint256 sqrtPriceX96twap;
-        for (uint256 i = 0; i < BUFFER_LENGTH; i++) {
-            sqrtPriceX96twap += (buffer[i] / BUFFER_LENGTH);
-        }
-        return sqrtPriceX96twap**2 / X192_DIV_TEN_20;
-    }
-
-    function decimals() external pure override returns (uint8) {
-        return 8;
-    }
-}
