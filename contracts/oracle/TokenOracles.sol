@@ -13,7 +13,8 @@ contract TokenOracles is AccessControl {
     mapping(IERC20 => IPriceOracle) internal oracles;
 
     constructor(address oracleManager) {
-        grantRole(ORACLE_MANAGER, oracleManager);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ORACLE_MANAGER, oracleManager);
     }
 
     function setTokenOracle(ERC20 token, IPriceOracle oracle)
@@ -25,10 +26,17 @@ contract TokenOracles is AccessControl {
 
     /* just a convenience function, delete if unneccessary */
     function getLatestPrice(ERC20 token)
-        external
+        external view
         returns (uint256 price, uint8 decimals)
     {
-        return (oracles[token].getPrice(), oracles[token].decimals());
+        (bool success, bytes memory priceData) = address(oracles[token]).staticcall(abi.encodeWithSignature("getPrice()"));
+        (, bytes memory decimalsData) = address(oracles[token]).staticcall(abi.encodeWithSignature("getPrice()"));
+        if(success) {
+            (uint latestPrice) = abi.decode(priceData, (uint));
+            (uint decimals) = abi.decode(priceData, (uint));
+            return (latestPrice, oracles[token].decimals());
+        }
+        require(success, "Contract call failed");
     }
 
     function getLatestRelative(IERC20 _base, IERC20 _quote)
@@ -109,7 +117,7 @@ contract CmkUsdcTwapPriceOracle is IPriceOracle, AccessControl {
         IUniswapV3Pool(0xF7a716E2df2BdE4D0BA7656c131b06b1Af68513c);
 
     constructor(address priceManager) {
-        grantRole(PRICE_MANAGER, priceManager);
+        _grantRole(PRICE_MANAGER, priceManager);
         buffer = new uint256[](BUFFER_LENGTH);
 
         //Fill the buffer with the instantaneous price
@@ -128,8 +136,8 @@ contract CmkUsdcTwapPriceOracle is IPriceOracle, AccessControl {
         }
     }
 
-    function getPrice() external override returns (uint256) {
-        sample();
+    function getPrice() public view override returns (uint256) {
+        address(this).staticcall(abi.encodeWithSignature("sample()"));
         uint256 sqrtPriceX96twap;
         for (uint256 i = 0; i < BUFFER_LENGTH; i++) {
             sqrtPriceX96twap += (buffer[i] / BUFFER_LENGTH);

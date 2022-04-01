@@ -22,7 +22,7 @@ contract CredmarkMembershipToken is ERC721, ERC721Enumerable, AccessControl {
     {
         registry = _registry;
         cmk = _cmk;
-        grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     function safeMint(address to) internal returns (uint256 tokenId) {

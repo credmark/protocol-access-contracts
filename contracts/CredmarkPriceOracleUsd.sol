@@ -10,7 +10,7 @@ contract CredmarkPriceOracleUsd is AccessControl, IPriceOracle {
     uint256 private cmkPrice;
 
     constructor() {
-        grantRole(ORACLE_MANAGER, msg.sender);
+        _grantRole(ORACLE_MANAGER, msg.sender);
     }
 
     function decimals() external pure override returns (uint8) {

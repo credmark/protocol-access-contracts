@@ -28,8 +28,8 @@ contract CredmarkMembershipRegistry is AccessControl {
         public tiersByRewardsPool;
 
     constructor(address registryManager) {
-        grantRole(REGISTRY_MANAGER, msg.sender);
-        grantRole(REGISTRY_MANAGER, registryManager);
+        _grantRole(REGISTRY_MANAGER, msg.sender);
+        _grantRole(REGISTRY_MANAGER, registryManager);
     }
 
     // TIERS //

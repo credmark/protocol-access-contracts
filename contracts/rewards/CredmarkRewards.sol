@@ -23,7 +23,7 @@ contract CredmarkRewards is AccessControl {
         IERC20 _rewardsToken,
         IERC721 _nonFungibleToken
     ) {
-        grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
         rewardsToken = _rewardsToken;
         nonFungibleToken = _nonFungibleToken;
     }

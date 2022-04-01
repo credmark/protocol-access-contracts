@@ -16,7 +16,9 @@ if (process.env.ACCOUNT_MNEMONIC) {
 } else if (process.env.ACCOUNT_PRIVATE_KEY) {
   accounts = [process.env.ACCOUNT_PRIVATE_KEY];
 }
-
+const CHAIN_IDS = {
+  hardhat: 31337, 
+};
 const config: HardhatUserConfig = {
   gasReporter: {
     enabled: !!process.env.REPORT_GAS,
@@ -25,7 +27,11 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      allowUnlimitedContractSize: false,
+      chainId: CHAIN_IDS.hardhat,
+      forking: {
+        enabled: true,
+        url: `https://eth-mainnet.alchemyapi.io/v2/LilE1jthU7j0D4X6eBKbTG4Nak7MstUm`,
+      }
     },
     mainnet: {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`,

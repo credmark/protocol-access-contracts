@@ -29,7 +29,7 @@ contract CredmarkMembershipRewardsPool is AccessControl {
         CredmarkMembershipRegistry _registry,
         address _membershipAddress
     ) {
-        grantRole(REWARDS_MANAGER, _membershipAddress);
+        _grantRole(REWARDS_MANAGER, _membershipAddress);
         SafeERC20.safeApprove(
             _rewardsToken,
             _membershipAddress,

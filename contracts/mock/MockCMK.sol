@@ -20,9 +20,9 @@ contract MockCMK is
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     constructor() ERC20("Credmark", "CMK") ERC20Permit("Credmark") {
-        grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        grantRole(SNAPSHOT_ROLE, msg.sender);
-        grantRole(PAUSER_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(SNAPSHOT_ROLE, msg.sender);
+        _grantRole(PAUSER_ROLE, msg.sender);
         _mint(msg.sender, 100000000 * 10**decimals());
     }
 

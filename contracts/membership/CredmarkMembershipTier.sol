@@ -11,7 +11,8 @@ contract CredmarkMembershipTier is AccessControl {
     using SafeERC20 for IERC20;
 
     struct Cursor {
-        uint256 snapshot;
+        uint256 snapshot; 
+        // for fee, this is the global fees, for rewards this is the global rewards per wei
         uint256 timestamp;
         uint256 rate;
     }
@@ -38,6 +39,7 @@ contract CredmarkMembershipTier is AccessControl {
     MembershipTierConfiguration public config;
 
     Cursor private _feeCursor;
+    Cursor private _rewardCursor;
 
     uint256 public totalDeposits;
     CredmarkMembershipRegistry internal registry;
@@ -53,7 +55,7 @@ contract CredmarkMembershipTier is AccessControl {
         CredmarkMembershipRegistry _registry,
         address tierManager
     ) {
-        grantRole(TIER_MANAGER, tierManager);
+        _grantRole(TIER_MANAGER, tierManager);
 
         SafeERC20.safeApprove(
             configuration.baseToken,
@@ -75,7 +77,7 @@ contract CredmarkMembershipTier is AccessControl {
     function rewards(uint256 tokenId) public view returns (uint256) {
         return
             (_globalRewards() - _memberships[tokenId].rewardCursorSnapshot) *
-            (deposits(tokenId) / totalDeposits) +
+            deposits(tokenId) +
             _memberships[tokenId].unclaimedRewards;
     }
 
@@ -97,7 +99,7 @@ contract CredmarkMembershipTier is AccessControl {
     }
 
     function _globalRewards() internal view returns (uint256) {
-        return registry.rewardsPoolByTier(this).globalTierRewards(this);
+        return registry.rewardsPoolByTier(this).globalTierRewards(this) / totalDeposits;
     }
 
     function deposit(uint256 tokenId, uint256 amount)
