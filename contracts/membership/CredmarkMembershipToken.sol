@@ -10,7 +10,7 @@ import "./CredmarkMembershipTier.sol";
 import "./CredmarkMembershipRegistry.sol";
 import "../oracle/TokenOracles.sol";
 
-contract CredmarkMembershipToken is ERC721, ERC721Enumerable, AccessControl {
+contract CredmarkMembershipToken is ERC721, ERC721Enumerable {
     using Counters for Counters.Counter;
 
     Counters.Counter private _tokenIdCounter;
@@ -20,7 +20,6 @@ contract CredmarkMembershipToken is ERC721, ERC721Enumerable, AccessControl {
         ERC721("CredmarkMembershipToken", "cmkMembership")
     {
         registry = _registry;
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     function safeMint(address to) internal returns (uint256 tokenId) {
@@ -42,7 +41,7 @@ contract CredmarkMembershipToken is ERC721, ERC721Enumerable, AccessControl {
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, ERC721Enumerable, AccessControl)
+        override(ERC721, ERC721Enumerable)
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
@@ -54,8 +53,10 @@ contract CredmarkMembershipToken is ERC721, ERC721Enumerable, AccessControl {
         CredmarkMembershipTier tier
     ) external returns (uint256 tokenId) {
         require(registry.exists(address(tier)), "Unsupported Tier");
+
+        // Getting a different contract's role may be a bad idea, probably want a subscribe despite check on the interface
         require(
-            hasRole(DEFAULT_ADMIN_ROLE, msg.sender) || tier.isSubscribable(),
+            tier.hasRole(tier.TIER_MANAGER_ROLE(), msg.sender) || tier.isSubscribable(),
             "Tier not Subscribeable"
         );
 
@@ -148,12 +149,11 @@ contract CredmarkMembershipToken is ERC721, ERC721Enumerable, AccessControl {
         require(isSolvent(tokenId), "Token is not solvent");
 
         address owner = ownerOf(tokenId);
+        CredmarkMembershipTier tier = registry.subscription(tokenId);
         require(
-            owner == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+            owner == msg.sender || tier.hasRole(tier.TIER_MANAGER_ROLE(), msg.sender),
             "Not approved to claim this token"
         );
-
-        CredmarkMembershipTier tier = registry.subscriptions(tokenId);
 
         uint256 rewards = tier.rewards(tokenId);
         require(rewards >= amount, "Amount is higher than rewards");

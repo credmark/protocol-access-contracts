@@ -10,7 +10,7 @@ import "./CredmarkMembershipRewardsPool.sol";
 import "../oracle/TokenOracles.sol";
 
 contract CredmarkMembershipRegistry is AccessControl {
-    bytes32 public constant REGISTRY_MANAGER = keccak256("REGISTRY_MANAGER");
+    bytes32 public constant REGISTRY_MANAGER_ROLE = keccak256("REGISTRY_MANAGER_ROLE");
 
     TokenOracles public tokenOracle;
     CredmarkMembershipToken public membershipToken;
@@ -28,8 +28,7 @@ contract CredmarkMembershipRegistry is AccessControl {
         public tiersByRewardsPool;
 
     constructor(address registryManager) {
-        _grantRole(REGISTRY_MANAGER, msg.sender);
-        _grantRole(REGISTRY_MANAGER, registryManager);
+        _grantRole(REGISTRY_MANAGER_ROLE, registryManager);
     }
 
     // TIERS //
@@ -44,7 +43,7 @@ contract CredmarkMembershipRegistry is AccessControl {
 
     function addTier(CredmarkMembershipTier tier)
         external
-        onlyRole(REGISTRY_MANAGER)
+        onlyRole(REGISTRY_MANAGER_ROLE)
     {
         tiers.push(tier);
         exists[address(tier)] = true;
@@ -58,7 +57,7 @@ contract CredmarkMembershipRegistry is AccessControl {
 
     function addOracle(TokenOracles _tokenOracle)
         external
-        onlyRole(REGISTRY_MANAGER)
+        onlyRole(REGISTRY_MANAGER_ROLE)
     {
         tokenOracle = _tokenOracle;
     }
@@ -67,7 +66,7 @@ contract CredmarkMembershipRegistry is AccessControl {
 
     function addRewardsPool(CredmarkMembershipRewardsPool rewardsPool)
         external
-        onlyRole(REGISTRY_MANAGER)
+        onlyRole(REGISTRY_MANAGER_ROLE)
     {
         require(!exists[address(rewardsPool)], "RewardsPool already exists.");
         rewardsPools.push(rewardsPool);
@@ -81,7 +80,7 @@ contract CredmarkMembershipRegistry is AccessControl {
     function setTierRewardsPool(
         CredmarkMembershipTier tier,
         CredmarkMembershipRewardsPool rewardsPool
-    ) external onlyRole(REGISTRY_MANAGER) {
+    ) external onlyRole(REGISTRY_MANAGER_ROLE) {
         require(exists[address(tier)], "Tier doesn't Exist.");
         require(exists[address(rewardsPool)], "RewardsPool doesn't Exist.");
         rewardsPoolByTier[tier] = rewardsPool;
@@ -92,7 +91,7 @@ contract CredmarkMembershipRegistry is AccessControl {
 
     function setTreasury(address _treasury)
         external
-        onlyRole(REGISTRY_MANAGER)
+        onlyRole(REGISTRY_MANAGER_ROLE)
     {
         treasury = _treasury;
     }
@@ -101,7 +100,7 @@ contract CredmarkMembershipRegistry is AccessControl {
 
     function setMembershipToken(CredmarkMembershipToken _membershipToken)
         external
-        onlyRole(REGISTRY_MANAGER)
+        onlyRole(REGISTRY_MANAGER_ROLE)
     {
         require(
             address(membershipToken) == address(0),
@@ -112,7 +111,7 @@ contract CredmarkMembershipRegistry is AccessControl {
 
     function subscribe(uint256 tokenId, CredmarkMembershipTier tier)
         external
-        onlyRole(REGISTRY_MANAGER)
+        onlyRole(REGISTRY_MANAGER_ROLE)
     {
         require(exists[address(tier)], "Tier doesn't Exist.");
         subscriptions[tokenId] = tier;

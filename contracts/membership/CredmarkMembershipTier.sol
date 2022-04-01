@@ -34,7 +34,7 @@ contract CredmarkMembershipTier is AccessControl {
         IERC20 feeToken;
     }
 
-    bytes32 public constant TIER_MANAGER = keccak256("TIER_MANAGER");
+    bytes32 public constant TIER_MANAGER_ROLE = keccak256("TIER_MANAGER");
 
     MembershipTierConfiguration public config;
 
@@ -51,12 +51,12 @@ contract CredmarkMembershipTier is AccessControl {
     event Exited(uint256 tokenId);
 
     constructor(
-        MembershipTierConfiguration memory configuration,
         CredmarkMembershipRegistry _registry,
-        address tierManager
+        address tierManager,
+        MembershipTierConfiguration memory configuration
     ) {
-        _grantRole(TIER_MANAGER, tierManager);
-
+        _grantRole(TIER_MANAGER_ROLE, tierManager);
+        // should this not happen in the constructor?
         SafeERC20.safeApprove(
             configuration.baseToken,
             address(_registry.membershipToken()),
@@ -104,7 +104,7 @@ contract CredmarkMembershipTier is AccessControl {
 
     function deposit(uint256 tokenId, uint256 amount)
         external
-        onlyRole(TIER_MANAGER)
+        onlyRole(TIER_MANAGER_ROLE)
     {
         totalDeposits += amount;
         _memberships[tokenId].deposited += amount;
@@ -120,7 +120,7 @@ contract CredmarkMembershipTier is AccessControl {
 
     function claim(uint256 tokenId, uint256 amount)
         external
-        onlyRole(TIER_MANAGER)
+        onlyRole(TIER_MANAGER_ROLE)
         returns (uint256 claimableRewards)
     {
         claimableRewards = rewards(tokenId);
@@ -132,7 +132,7 @@ contract CredmarkMembershipTier is AccessControl {
 
     function exit(uint256 tokenId)
         external
-        onlyRole(TIER_MANAGER)
+        onlyRole(TIER_MANAGER_ROLE)
         returns (
             uint256 exitDeposits,
             uint256 exitRewards,
@@ -163,7 +163,7 @@ contract CredmarkMembershipTier is AccessControl {
 
     function setFeeSeconds(uint256 newFeeSeconds)
         external
-        onlyRole(TIER_MANAGER)
+        onlyRole(TIER_MANAGER_ROLE)
     {
         config.feePerSecond = newFeeSeconds;
         snapshotFee();
@@ -171,21 +171,21 @@ contract CredmarkMembershipTier is AccessControl {
 
     function setLockupSeconds(uint256 newLockupPeriod)
         external
-        onlyRole(TIER_MANAGER)
+        onlyRole(TIER_MANAGER_ROLE)
     {
         config.lockupSeconds = newLockupPeriod;
     }
 
     function setSubscribable(bool subscribable)
         external
-        onlyRole(TIER_MANAGER)
+        onlyRole(TIER_MANAGER_ROLE)
     {
         config.subscribable = subscribable;
     }
 
     function setMultiplier(uint256 newMultiplier)
         external
-        onlyRole(TIER_MANAGER)
+        onlyRole(TIER_MANAGER_ROLE)
     {
         config.multiplier = newMultiplier;
         registry.rewardsPoolByTier(this).snapshot();

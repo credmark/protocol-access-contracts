@@ -13,7 +13,7 @@ contract CredmarkMembershipRewardsPool is AccessControl {
 
     IERC20 public rewardsToken;
     CredmarkMembershipRegistry private registry;
-    bytes32 public constant REWARDS_MANAGER = keccak256("REWARDS_MANAGER");
+    bytes32 public constant REGISTRY_MANAGER_ROLE = keccak256("REGISTRY_MANAGER_ROLE");
 
     uint256 public totalShares;
     uint256 public tokensPerSecond;
@@ -25,28 +25,27 @@ contract CredmarkMembershipRewardsPool is AccessControl {
     uint256 public lastSnapshotTimestamp;
 
     constructor(
-        IERC20 _rewardsToken,
         CredmarkMembershipRegistry _registry,
-        address _membershipAddress
+        IERC20 _rewardsToken,
+        address _membershipToken
     ) {
-        _grantRole(REWARDS_MANAGER, _membershipAddress);
         SafeERC20.safeApprove(
             _rewardsToken,
-            _membershipAddress,
+            _membershipToken,
             _rewardsToken.totalSupply()
         );
         rewardsToken = _rewardsToken;
         registry = _registry;
     }
 
-    function start() external onlyRole(REWARDS_MANAGER) {
+    function start() external onlyRole(REGISTRY_MANAGER_ROLE) {
         require(totalShares > 0, "No Deposits in tiers");
         startTimestamp = block.timestamp;
     }
 
     function setTokensPerSecond(uint256 _tokensPerSecond)
         external
-        onlyRole(REWARDS_MANAGER)
+        onlyRole(REGISTRY_MANAGER_ROLE)
     {
         snapshot();
         tokensPerSecond = _tokensPerSecond;
