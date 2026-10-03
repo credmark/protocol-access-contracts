@@ -1,9 +1,8 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { BigNumber } from 'ethers';
-import * as utils from 'ethers/lib/utils';
-import { ethers, waffle } from 'hardhat';
+import { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers';
+import { ethers } from 'hardhat';
+import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import { MerkleTree } from 'merkletreejs';
-import { CredmarkRewards, MockCMK, MockNFT } from '../typechain';
+import { CredmarkRewards, MockCMK, MockNFT } from '../typechain-types';
 import { expect } from 'chai';
 
 describe('Credmark Rewards', () => {
@@ -19,34 +18,34 @@ describe('Credmark Rewards', () => {
 
   const leaves = [
     {
-      tokenId: BigNumber.from(0),
-      amount: BigNumber.from(1),
+      tokenId: BigInt(0),
+      amount: BigInt(1),
     },
     {
-      tokenId: BigNumber.from(1),
-      amount: BigNumber.from(100),
+      tokenId: BigInt(1),
+      amount: BigInt(100),
     },
     {
-      tokenId: BigNumber.from(2),
-      amount: BigNumber.from(3).mul(BigNumber.from(10).pow(18)),
+      tokenId: BigInt(2),
+      amount: BigInt(3) * (BigInt(10) ** (BigInt(18))),
     },
     {
-      tokenId: BigNumber.from(3),
-      amount: BigNumber.from(4).mul(BigNumber.from(10).pow(18)),
+      tokenId: BigInt(3),
+      amount: BigInt(4) * (BigInt(10) ** (BigInt(18))),
     },
     {
-      tokenId: BigNumber.from(4),
-      amount: BigNumber.from(5).mul(BigNumber.from(10).pow(18)),
+      tokenId: BigInt(4),
+      amount: BigInt(5) * (BigInt(10) ** (BigInt(18))),
     },
     {
-      tokenId: BigNumber.from(5),
-      amount: BigNumber.from(50).mul(1e6).mul(BigNumber.from(10).pow(18)),
+      tokenId: BigInt(5),
+      amount: BigInt(50) * (BigInt(1e6)) * (BigInt(10) ** (BigInt(18))),
     },
   ];
 
-  const encodeLeaf = (leaf: { tokenId: BigNumber; amount: BigNumber }) =>
-    utils.keccak256(
-      utils.defaultAbiCoder.encode(
+  const encodeLeaf = (leaf: { tokenId: bigint; amount: bigint }) =>
+    ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
         ['uint256', 'uint256'],
         [leaf.tokenId, leaf.amount]
       )
@@ -54,17 +53,17 @@ describe('Credmark Rewards', () => {
 
   const fixture = async (): Promise<[MockCMK, MockNFT, CredmarkRewards]> => {
     const mockCmkFactory = await ethers.getContractFactory('MockCMK');
-    const _cmk = (await mockCmkFactory.connect(admin).deploy()) as MockCMK;
+    const _cmk = (await mockCmkFactory.connect(admin).deploy()) as unknown as MockCMK;
 
     const mockNftFactory = await ethers.getContractFactory('MockNFT');
-    const _nft = (await mockNftFactory.connect(admin).deploy()) as MockNFT;
+    const _nft = (await mockNftFactory.connect(admin).deploy()) as unknown as MockNFT;
 
     const credmarkRewardsFactory = await ethers.getContractFactory(
       'CredmarkRewards'
     );
     const _credmarkRewards = (await credmarkRewardsFactory
       .connect(admin)
-      .deploy(admin.address, _cmk.address, _nft.address)) as CredmarkRewards;
+      .deploy(await admin.getAddress(), await _cmk.getAddress(), await _nft.getAddress())) as unknown as CredmarkRewards;
 
     return [
       _cmk.connect(wallet),
@@ -75,11 +74,11 @@ describe('Credmark Rewards', () => {
 
   beforeEach(async () => {
     [wallet, otherWallet, admin] = await ethers.getSigners();
-    [cmk, nft, credmarkRewards] = await waffle.loadFixture(fixture);
+    [cmk, nft, credmarkRewards] = await loadFixture(fixture);
 
     merkleTree = new MerkleTree(
       leaves.map((leaf) => encodeLeaf(leaf)),
-      utils.keccak256,
+      ethers.keccak256,
       { sort: true }
     );
   });
@@ -116,17 +115,17 @@ describe('Credmark Rewards', () => {
       await cmk
         .connect(admin)
         .transfer(
-          credmarkRewards.address,
-          BigNumber.from(100).mul(1e6).mul(BigNumber.from(10).pow(18))
+          await credmarkRewards.getAddress(),
+          BigInt(100) * (BigInt(1e6)) * (BigInt(10) ** (BigInt(18)))
         );
 
-      await nft.safeMint(wallet.address); // 0
-      await nft.safeMint(wallet.address); // 1
-      await nft.safeMint(wallet.address); // 2
+      await nft.safeMint(await wallet.getAddress()); // 0
+      await nft.safeMint(await wallet.getAddress()); // 1
+      await nft.safeMint(await wallet.getAddress()); // 2
 
-      await nft.safeMint(otherWallet.address); // 3
-      await nft.safeMint(otherWallet.address); // 4
-      await nft.safeMint(otherWallet.address); // 5
+      await nft.safeMint(await otherWallet.getAddress()); // 3
+      await nft.safeMint(await otherWallet.getAddress()); // 4
+      await nft.safeMint(await otherWallet.getAddress()); // 5
 
       await credmarkRewards
         .connect(admin)
@@ -150,11 +149,11 @@ describe('Credmark Rewards', () => {
       await cmk
         .connect(admin)
         .transfer(
-          credmarkRewards.address,
-          BigNumber.from(100).mul(1e6).mul(BigNumber.from(10).pow(18))
+          await credmarkRewards.getAddress(),
+          BigInt(100) * (BigInt(1e6)) * (BigInt(10) ** (BigInt(18)))
         );
 
-      await nft.safeMint(wallet.address); // 0
+      await nft.safeMint(await wallet.getAddress()); // 0
 
       await credmarkRewards
         .connect(admin)
@@ -169,7 +168,7 @@ describe('Credmark Rewards', () => {
         )
       )
         .to.emit(credmarkRewards, 'RewardsClaimed')
-        .withArgs(wallet.address, leaf.amount);
+        .withArgs(await wallet.getAddress(), leaf.amount);
 
       await expect(
         credmarkRewards.claimRewards(
@@ -179,15 +178,15 @@ describe('Credmark Rewards', () => {
         )
       )
         .to.emit(credmarkRewards, 'RewardsClaimed')
-        .withArgs(wallet.address, BigNumber.from(0));
+        .withArgs(await wallet.getAddress(), BigInt(0));
     });
 
     it('should fail to claim rewards for unminted nft', async () => {
       await cmk
         .connect(admin)
         .transfer(
-          credmarkRewards.address,
-          BigNumber.from(100).mul(1e6).mul(BigNumber.from(10).pow(18))
+          await credmarkRewards.getAddress(),
+          BigInt(100) * (BigInt(1e6)) * (BigInt(10) ** (BigInt(18)))
         );
 
       await credmarkRewards
@@ -208,11 +207,11 @@ describe('Credmark Rewards', () => {
       await cmk
         .connect(admin)
         .transfer(
-          credmarkRewards.address,
-          BigNumber.from(100).mul(1e6).mul(BigNumber.from(10).pow(18))
+          await credmarkRewards.getAddress(),
+          BigInt(100) * (BigInt(1e6)) * (BigInt(10) ** (BigInt(18)))
         );
 
-      await nft.safeMint(wallet.address); // 0
+      await nft.safeMint(await wallet.getAddress()); // 0
 
       await credmarkRewards
         .connect(admin)
@@ -222,7 +221,7 @@ describe('Credmark Rewards', () => {
       await expect(
         credmarkRewards.claimRewards(
           leaf.tokenId,
-          leaf.amount.add(1),
+          leaf.amount + (BigInt(1)),
           merkleTree.getHexProof(encodeLeaf(leaf))
         )
       ).to.be.revertedWith('Invalid proof');
@@ -232,7 +231,7 @@ describe('Credmark Rewards', () => {
           leaf.tokenId,
           leaf.amount,
           merkleTree.getHexProof(
-            encodeLeaf({ tokenId: leaf.tokenId, amount: leaf.amount.add(1) })
+            encodeLeaf({ tokenId: leaf.tokenId, amount: leaf.amount + (BigInt(1)) })
           )
         )
       ).to.be.revertedWith('Invalid proof');
@@ -242,11 +241,11 @@ describe('Credmark Rewards', () => {
       await cmk
         .connect(admin)
         .transfer(
-          credmarkRewards.address,
-          BigNumber.from(100).mul(1e6).mul(BigNumber.from(10).pow(18))
+          await credmarkRewards.getAddress(),
+          BigInt(100) * (BigInt(1e6)) * (BigInt(10) ** (BigInt(18)))
         );
 
-      await nft.safeMint(wallet.address); // 0
+      await nft.safeMint(await wallet.getAddress()); // 0
 
       await credmarkRewards
         .connect(admin)
@@ -263,11 +262,11 @@ describe('Credmark Rewards', () => {
           )
       )
         .to.emit(credmarkRewards, 'RewardsClaimed')
-        .withArgs(wallet.address, leaf.amount);
+        .withArgs(await wallet.getAddress(), leaf.amount);
 
-      expect(await cmk.balanceOf(wallet.address)).to.equal(leaf.amount);
-      expect(await cmk.balanceOf(otherWallet.address)).to.equal(
-        BigNumber.from(0)
+      expect(await cmk.balanceOf(await wallet.getAddress())).to.equal(leaf.amount);
+      expect(await cmk.balanceOf(await otherWallet.getAddress())).to.equal(
+        BigInt(0)
       );
     });
   });

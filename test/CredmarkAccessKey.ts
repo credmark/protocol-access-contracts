@@ -1,28 +1,28 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers';
 import { expect } from 'chai';
-import { BigNumber } from 'ethers';
-import { ethers, waffle } from 'hardhat';
+import { ethers } from 'hardhat';
+import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import {
   CredmarkAccessKey,
   MockCMK,
   CredmarkPriceOracleUsd,
   CredmarkAccessKeySubscriptionTier,
   RewardsPool,
-} from '../typechain';
+} from '../typechain-types';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const THIRTY_DAYS_IN_SEC = 2592000;
 
-const toWei = (num: BigNumber | number) => {
+const toWei = (num: bigint | number) => {
   if (typeof num === 'number') {
-    num = BigNumber.from(num);
+    num = BigInt(num);
   }
 
-  return num.mul(BigNumber.from(10).pow(18));
+  return num * (BigInt(10) ** (BigInt(18)));
 };
 
-const fromWei = (num: BigNumber) => {
-  return num.div(BigNumber.from(10).pow(18));
+const fromWei = (num: bigint): bigint => {
+  return num / (BigInt(10) ** BigInt(18));
 };
 
 describe('Credmark Access Key', () => {
@@ -36,49 +36,49 @@ describe('Credmark Access Key', () => {
 
   const fixture = async (): Promise<[MockCMK, CredmarkAccessKey]> => {
     const mockCmkFactory = await ethers.getContractFactory('MockCMK');
-    const _cmk = (await mockCmkFactory.connect(admin).deploy()) as MockCMK;
+    const _cmk = (await mockCmkFactory.connect(admin).deploy()) as unknown as MockCMK;
 
     const credmarkAccessKeyFactory = await ethers.getContractFactory(
       'CredmarkAccessKey'
     );
     const _credmarkAccessKey = (await credmarkAccessKeyFactory
       .connect(admin)
-      .deploy(_cmk.address, credmarkDao.address)) as CredmarkAccessKey;
+      .deploy(await _cmk.getAddress(), await credmarkDao.getAddress())) as unknown as CredmarkAccessKey;
 
     return [_cmk.connect(wallet), _credmarkAccessKey.connect(wallet)];
   };
 
   beforeEach(async () => {
     [wallet, otherWallet, credmarkDao, admin] = await ethers.getSigners();
-    [cmk, credmarkAccessKey] = await waffle.loadFixture(fixture);
+    [cmk, credmarkAccessKey] = await loadFixture(fixture);
   });
 
   it('should deploy', () => {});
 
   describe('#setDaoTreasury', () => {
     it('should only allow dao manager to set dao treasury', async () => {
-      await expect(credmarkAccessKey.setDaoTreasury(otherWallet.address)).to.be
+      await expect(credmarkAccessKey.setDaoTreasury(await otherWallet.getAddress())).to.be
         .reverted;
 
       await credmarkAccessKey
         .connect(admin)
-        .setDaoTreasury(otherWallet.address);
+        .setDaoTreasury(await otherWallet.getAddress());
     });
   });
 
   describe('#mint', () => {
     it('should mint', async () => {
-      const tokenId = BigNumber.from(0);
-      await expect(credmarkAccessKey.safeMint(wallet.address))
+      const tokenId = BigInt(0);
+      await expect(credmarkAccessKey.safeMint(await wallet.getAddress()))
         .to.emit(credmarkAccessKey, 'Transfer')
-        .withArgs(ZERO_ADDRESS, wallet.address, tokenId);
+        .withArgs(ZERO_ADDRESS, await wallet.getAddress(), tokenId);
 
-      expect(await credmarkAccessKey.balanceOf(wallet.address)).to.be.equal(1);
+      expect(await credmarkAccessKey.balanceOf(await wallet.getAddress())).to.be.equal(1);
       expect(await credmarkAccessKey.ownerOf(tokenId)).to.be.equal(
-        wallet.address
+        await wallet.getAddress()
       );
       expect(
-        await credmarkAccessKey.tokenOfOwnerByIndex(wallet.address, 0)
+        await credmarkAccessKey.tokenOfOwnerByIndex(await wallet.getAddress(), 0)
       ).to.be.equal(tokenId);
     });
   });
@@ -88,31 +88,31 @@ describe('Credmark Access Key', () => {
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
-      await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
+      await oracle.updateOracle(BigInt(2514)); // $0.2514
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
       );
 
       expect(await credmarkAccessKey.totalSupportedTiers()).to.be.equal(
-        BigNumber.from(1)
+        BigInt(1)
       );
 
       const newTierAddress = await credmarkAccessKey.supportedTiers(0);
       const newTier = (await ethers.getContractAt(
         'CredmarkAccessKeySubscriptionTier',
         newTierAddress
-      )) as CredmarkAccessKeySubscriptionTier;
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
       expect(await newTier.subscribable()).to.be.equal(true);
       expect(await newTier.monthlyFeeUsdWei()).to.be.equal(toWei(100));
       expect(await newTier.debtPerSecond()).to.be.equal(
-        toWei(100).mul(10000).div(2514).div(THIRTY_DAYS_IN_SEC)
+        toWei(100) * (BigInt(10000)) / (BigInt(2514)) / (BigInt(THIRTY_DAYS_IN_SEC))
       );
     });
 
@@ -120,13 +120,13 @@ describe('Credmark Access Key', () => {
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
-      await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
+      await oracle.updateOracle(BigInt(2514)); // $0.2514
 
       await expect(
         credmarkAccessKey.connect(otherWallet).createSubscriptionTier(
-          admin.address,
-          oracle.address,
+          await admin.getAddress(),
+          await oracle.getAddress(),
           toWei(100),
           3600, // 1hour
           true
@@ -137,23 +137,23 @@ describe('Credmark Access Key', () => {
 
   describe('#subscribe', () => {
     it('should subscribe', async () => {
-      const tokenId = BigNumber.from(0);
-      const fundAmount = BigNumber.from(1000);
+      const tokenId = BigInt(0);
+      const fundAmount = BigInt(1000);
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await credmarkAccessKey.safeMint(wallet.address);
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await credmarkAccessKey.safeMint(await wallet.getAddress());
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
-      await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
+      await oracle.updateOracle(BigInt(2514)); // $0.2514
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -165,56 +165,56 @@ describe('Credmark Access Key', () => {
     });
 
     it('should not subscribe unsupported tier', async () => {
-      const tokenId = BigNumber.from(0);
-      const fundAmount = BigNumber.from(1000);
+      const tokenId = BigInt(0);
+      const fundAmount = BigInt(1000);
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await credmarkAccessKey.safeMint(wallet.address);
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await credmarkAccessKey.safeMint(await wallet.getAddress());
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
-      await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
+      await oracle.updateOracle(BigInt(2514)); // $0.2514
 
       const newTierFactory = await ethers.getContractFactory(
         'CredmarkAccessKeySubscriptionTier'
       );
 
       const newTier = (await newTierFactory.deploy(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
-        BigNumber.from(3600), // 1hour
-        cmk.address
-      )) as CredmarkAccessKeySubscriptionTier;
+        BigInt(3600), // 1hour
+        await cmk.getAddress()
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
       await newTier.setSubscribable(true);
 
       await expect(
-        credmarkAccessKey.subscribe(tokenId, newTier.address)
+        credmarkAccessKey.subscribe(tokenId, await newTier.getAddress())
       ).to.be.revertedWith('Unsupported subscription');
     });
 
     it('should not subscribe locked tier', async () => {
-      const tokenId = BigNumber.from(0);
-      const fundAmount = BigNumber.from(1000);
+      const tokenId = BigInt(0);
+      const fundAmount = BigInt(1000);
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await credmarkAccessKey.safeMint(wallet.address);
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await credmarkAccessKey.safeMint(await wallet.getAddress());
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
-      await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
+      await oracle.updateOracle(BigInt(2514)); // $0.2514
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         false
@@ -228,29 +228,29 @@ describe('Credmark Access Key', () => {
     });
 
     it('should transfer funds on switching subscription tiers', async () => {
-      const tokenId = BigNumber.from(0);
+      const tokenId = BigInt(0);
       const fundAmount = toWei(1000);
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
-      await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
+      await oracle.updateOracle(BigInt(2514)); // $0.2514
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         0, // 1hour
         true
       );
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(1000),
         3600, // 1hour
         true
@@ -277,7 +277,7 @@ describe('Credmark Access Key', () => {
 
       expect(
         await credmarkAccessKey.totalCmkStaked(subscriptionTier1Address)
-      ).to.be.equal(BigNumber.from(0));
+      ).to.be.equal(BigInt(0));
 
       expect(
         fromWei(
@@ -289,23 +289,23 @@ describe('Credmark Access Key', () => {
 
   describe('#fund', () => {
     it('should fund', async () => {
-      const tokenId = BigNumber.from(0);
-      const fundAmount = BigNumber.from(1000);
+      const tokenId = BigInt(0);
+      const fundAmount = BigInt(1000);
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await credmarkAccessKey.safeMint(wallet.address);
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await credmarkAccessKey.safeMint(await wallet.getAddress());
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
-      await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
+      await oracle.updateOracle(BigInt(2514)); // $0.2514
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -325,21 +325,21 @@ describe('Credmark Access Key', () => {
 
   describe('#mintSubscribeAndFund', () => {
     it('should mint, fund & subscribe', async () => {
-      const fundAmount = BigNumber.from(1000);
+      const fundAmount = BigInt(1000);
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
-      await oracle.updateOracle(BigNumber.from(2514)); // $0.2514
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
+      await oracle.updateOracle(BigInt(2514)); // $0.2514
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -356,22 +356,22 @@ describe('Credmark Access Key', () => {
 
   describe('#debt', () => {
     it('should be in debt with time', async () => {
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(1000); // 1000 CMK ~= $400
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount.mul(2));
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount * (BigInt(2)));
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount.mul(2));
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount * (BigInt(2)));
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -399,12 +399,12 @@ describe('Credmark Access Key', () => {
       // 100$ for 30 days, so for 7 days,
       // debt = 100$ * (7 days / 30 days) / (1 cmk per $)
       expect(fromWei(await credmarkAccessKey.debt(0))).to.be.closeTo(
-        BigNumber.from(100).mul(7).mul(10000).div(30).div(cmkPrice),
+        BigInt(100) * (BigInt(7)) * (BigInt(10000)) / (BigInt(30)) / (cmkPrice),
         1
       );
 
       expect(fromWei(await credmarkAccessKey.debt(1))).to.be.closeTo(
-        BigNumber.from(100).mul(7).mul(10000).div(30).div(cmkPrice),
+        BigInt(100) * (BigInt(7)) * (BigInt(10000)) / (BigInt(30)) / (cmkPrice),
         1
       );
 
@@ -413,7 +413,7 @@ describe('Credmark Access Key', () => {
       expect(await credmarkAccessKey.debt(0)).to.be.equal(0);
 
       expect(fromWei(await credmarkAccessKey.debt(1))).to.be.closeTo(
-        BigNumber.from(100).mul(7).mul(10000).div(30).div(cmkPrice),
+        BigInt(100) * (BigInt(7)) * (BigInt(10000)) / (BigInt(30)) / (cmkPrice),
         1
       );
 
@@ -421,7 +421,7 @@ describe('Credmark Access Key', () => {
       const subscriptionTier = (await ethers.getContractAt(
         'CredmarkAccessKeySubscriptionTier',
         subscriptionTierAddress
-      )) as CredmarkAccessKeySubscriptionTier;
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
       await subscriptionTier.connect(admin).setMonthlyFeeUsd(toWei(200));
 
@@ -429,17 +429,17 @@ describe('Credmark Access Key', () => {
       await ethers.provider.send('evm_mine', []);
 
       expect(fromWei(await credmarkAccessKey.debt(0))).to.be.closeTo(
-        BigNumber.from(200).mul(7).mul(10000).div(30).div(cmkPrice),
+        BigInt(200) * (BigInt(7)) * (BigInt(10000)) / (BigInt(30)) / (cmkPrice),
         1
       );
 
       expect(fromWei(await credmarkAccessKey.debt(1))).to.be.closeTo(
-        BigNumber.from(100)
-          .mul(7)
-          .mul(10000)
-          .div(30)
-          .div(cmkPrice)
-          .add(BigNumber.from(200).mul(7).mul(10000).div(30).div(cmkPrice)),
+        BigInt(100)
+           * (BigInt(7))
+           * (BigInt(10000))
+           / (BigInt(30))
+           / (cmkPrice)
+           + (BigInt(200) * (BigInt(7)) * (BigInt(10000)) / (BigInt(30)) / (cmkPrice)),
         1
       );
     });
@@ -447,23 +447,23 @@ describe('Credmark Access Key', () => {
 
   describe('#burn', () => {
     it('should burn', async () => {
-      const tokenId = BigNumber.from(0);
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const tokenId = BigInt(0);
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(1000); // 1000 CMK ~= $400
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -485,11 +485,11 @@ describe('Credmark Access Key', () => {
       // 100$ for 30 days, so for 7 days,
       // debt = 100$ * (7 days / 30 days) / (0.25 cmk per $) ~= 93 CMK
       expect(fromWei(await credmarkAccessKey.debt(tokenId))).to.equal(
-        BigNumber.from(93)
+        BigInt(93)
       );
 
-      expect(fromWei(await cmk.balanceOf(credmarkDao.address))).to.equal(0);
-      expect(fromWei(await cmk.balanceOf(wallet.address))).to.equal(0);
+      expect(fromWei(await cmk.balanceOf(await credmarkDao.getAddress()))).to.equal(0);
+      expect(fromWei(await cmk.balanceOf(await wallet.getAddress()))).to.equal(0);
 
       await credmarkAccessKey.burn(tokenId);
 
@@ -497,31 +497,31 @@ describe('Credmark Access Key', () => {
         fromWei((await credmarkAccessKey.tokenInfo(tokenId)).cmkAmount)
       ).to.equal(0);
 
-      expect(fromWei(await cmk.balanceOf(credmarkDao.address))).to.equal(93);
-      expect(fromWei(await cmk.balanceOf(wallet.address))).to.equal(906);
+      expect(fromWei(await cmk.balanceOf(await credmarkDao.getAddress()))).to.equal(93);
+      expect(fromWei(await cmk.balanceOf(await wallet.getAddress()))).to.equal(906);
       await expect(
-        credmarkAccessKey.tokenOfOwnerByIndex(wallet.address, tokenId)
+        credmarkAccessKey.tokenOfOwnerByIndex(await wallet.getAddress(), tokenId)
       ).to.be.reverted;
     });
 
     it('should not burn for non-owner', async () => {
-      const tokenId = BigNumber.from(0);
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const tokenId = BigInt(0);
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(1000); // 1000 CMK ~= $400
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -540,23 +540,23 @@ describe('Credmark Access Key', () => {
     });
 
     it('should not burn when debt exceeds balance', async () => {
-      const tokenId = BigNumber.from(0);
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const tokenId = BigInt(0);
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(10); // 10 CMK ~= $4
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -577,7 +577,7 @@ describe('Credmark Access Key', () => {
       // 100$ for 30 days, so for 7 days,
       // debt = 100$ * (7 days / 30 days) / (0.25 cmk per $) ~= 93 CMK
       expect(fromWei(await credmarkAccessKey.debt(tokenId))).to.equal(
-        BigNumber.from(93)
+        BigInt(93)
       );
 
       await expect(credmarkAccessKey.burn(tokenId)).to.be.revertedWith(
@@ -588,23 +588,23 @@ describe('Credmark Access Key', () => {
 
   describe('#liquidate', () => {
     it('should liquidate when debt exceeds balance', async () => {
-      const tokenId = BigNumber.from(0);
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const tokenId = BigInt(0);
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(10); // 10 CMK ~= $4
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -627,28 +627,28 @@ describe('Credmark Access Key', () => {
       expect((await credmarkAccessKey.tokenInfo(tokenId)).cmkAmount).to.equal(
         0
       );
-      expect(await cmk.balanceOf(wallet.address)).to.equal(0);
-      expect(await cmk.balanceOf(credmarkDao.address)).to.equal(fundAmount);
+      expect(await cmk.balanceOf(await wallet.getAddress())).to.equal(0);
+      expect(await cmk.balanceOf(await credmarkDao.getAddress())).to.equal(fundAmount);
     });
 
     it('should not liquidate when debt is less than balance', async () => {
-      const tokenId = BigNumber.from(0);
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const tokenId = BigInt(0);
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(10); // 10 CMK ~= $4
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -673,23 +673,23 @@ describe('Credmark Access Key', () => {
 
   describe('#rewards', () => {
     it('should get rewards on burn', async () => {
-      const tokenId = BigNumber.from(0);
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const tokenId = BigInt(0);
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(1000); // 1000 CMK ~= $400
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(100),
         3600, // 1hour
         true
@@ -701,22 +701,22 @@ describe('Credmark Access Key', () => {
 
       const rewardsPool = (await rewardsPoolFactory
         .connect(admin)
-        .deploy(cmk.address)) as RewardsPool;
+        .deploy(await cmk.getAddress())) as unknown as RewardsPool;
 
-      await cmk.connect(admin).transfer(rewardsPool.address, toWei(10_000_000));
+      await cmk.connect(admin).transfer(await rewardsPool.getAddress(), toWei(10_000_000));
 
       await rewardsPool.connect(admin).start(toWei(10)); // 10 CMK per second
 
       await rewardsPool
         .connect(admin)
-        .addRecipient(subscriptionTierAddress, BigNumber.from(1));
+        .addRecipient(subscriptionTierAddress, BigInt(1));
 
       const subscriptionTier = (await ethers.getContractAt(
         'CredmarkAccessKeySubscriptionTier',
         subscriptionTierAddress
-      )) as CredmarkAccessKeySubscriptionTier;
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
-      await subscriptionTier.connect(admin).setRewardsPool(rewardsPool.address);
+      await subscriptionTier.connect(admin).setRewardsPool(await rewardsPool.getAddress());
 
       // Token ID 0
       await credmarkAccessKey.mintSubscribeAndFund(
@@ -730,7 +730,7 @@ describe('Credmark Access Key', () => {
       await ethers.provider.send('evm_mine', []);
 
       const debt = toWei(
-        BigNumber.from(100).mul(7).mul(10000).div(30).div(cmkPrice)
+        BigInt(100) * (BigInt(7)) * (BigInt(10000)) / (BigInt(30)) / (cmkPrice)
       );
 
       // 100$ for 30 days, so for 7 days,
@@ -742,34 +742,34 @@ describe('Credmark Access Key', () => {
 
       await credmarkAccessKey.burn(tokenId);
 
-      const reward = BigNumber.from(sevenDays).mul(toWei(10));
-      expect(fromWei(await cmk.balanceOf(wallet.address))).to.be.closeTo(
-        fromWei(fundAmount.sub(debt).add(reward)),
+      const reward = BigInt(sevenDays) * (toWei(10));
+      expect(fromWei(await cmk.balanceOf(await wallet.getAddress()))).to.be.closeTo(
+        fromWei(fundAmount - (debt) + (reward)),
         100
       );
     });
 
     it('should get proportional rewards by multiplier', async () => {
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(1000); // 1000 CMK ~= $400
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
-      await cmk.connect(admin).transfer(otherWallet.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
+      await cmk.connect(admin).transfer(await otherWallet.getAddress(), fundAmount);
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
       await cmk
         .connect(otherWallet)
-        .approve(credmarkAccessKey.address, fundAmount);
+        .approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(1_000),
         3600, // 1hour
         true
@@ -780,8 +780,8 @@ describe('Credmark Access Key', () => {
       );
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(1_000), // 1000 USD per month ~= 0.00154 CMK/s
         3600, // 1hour
         true
@@ -795,39 +795,39 @@ describe('Credmark Access Key', () => {
 
       const rewardsPool = (await rewardsPoolFactory
         .connect(admin)
-        .deploy(cmk.address)) as RewardsPool;
+        .deploy(await cmk.getAddress())) as unknown as RewardsPool;
 
-      await cmk.connect(admin).transfer(rewardsPool.address, toWei(10_000_000));
-
-      await rewardsPool
-        .connect(admin)
-        .start(toWei(1).div(BigNumber.from(1000))); // 0.001 CMK per second
+      await cmk.connect(admin).transfer(await rewardsPool.getAddress(), toWei(10_000_000));
 
       await rewardsPool
         .connect(admin)
-        .addRecipient(subscriptionTier1xAddress, BigNumber.from(1));
+        .start(toWei(1) / (BigInt(1000))); // 0.001 CMK per second
 
       await rewardsPool
         .connect(admin)
-        .addRecipient(subscriptionTier2xAddress, BigNumber.from(2));
+        .addRecipient(subscriptionTier1xAddress, BigInt(1));
+
+      await rewardsPool
+        .connect(admin)
+        .addRecipient(subscriptionTier2xAddress, BigInt(2));
 
       const subscriptionTier1x = (await ethers.getContractAt(
         'CredmarkAccessKeySubscriptionTier',
         subscriptionTier1xAddress
-      )) as CredmarkAccessKeySubscriptionTier;
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
       await subscriptionTier1x
         .connect(admin)
-        .setRewardsPool(rewardsPool.address);
+        .setRewardsPool(await rewardsPool.getAddress());
 
       const subscriptionTier2x = (await ethers.getContractAt(
         'CredmarkAccessKeySubscriptionTier',
         subscriptionTier2xAddress
-      )) as CredmarkAccessKeySubscriptionTier;
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
       await subscriptionTier2x
         .connect(admin)
-        .setRewardsPool(rewardsPool.address);
+        .setRewardsPool(await rewardsPool.getAddress());
 
       // Token ID 0
       await credmarkAccessKey.mintSubscribeAndFund(
@@ -846,16 +846,16 @@ describe('Credmark Access Key', () => {
       await ethers.provider.send('evm_mine', []);
 
       // Rewards for seven days ~= 604 CMK
-      const totalReward = BigNumber.from(sevenDays).mul(
-        toWei(1).div(BigNumber.from(1000))
+      const totalReward = BigInt(sevenDays) * (
+        toWei(1) / (BigInt(1000))
       );
 
       // Debt for seven days ~= 933 CMK
-      const debt = toWei(BigNumber.from(1_000))
-        .mul(7)
-        .mul(10000)
-        .div(30)
-        .div(cmkPrice);
+      const debt = toWei(BigInt(1_000))
+         * (BigInt(7))
+         * (BigInt(10000))
+         / (BigInt(30))
+         / (cmkPrice);
 
       expect(fromWei(await credmarkAccessKey.debt(0))).to.be.closeTo(
         fromWei(debt),
@@ -868,39 +868,39 @@ describe('Credmark Access Key', () => {
       );
 
       await credmarkAccessKey.burn(0);
-      expect(fromWei(await cmk.balanceOf(wallet.address))).to.be.closeTo(
-        fromWei(fundAmount.add(totalReward.div(3)).sub(debt)),
+      expect(fromWei(await cmk.balanceOf(await wallet.getAddress()))).to.be.closeTo(
+        fromWei(fundAmount + (totalReward / (BigInt(3))) - (debt)),
         1
       );
 
       await credmarkAccessKey.connect(otherWallet).burn(1);
-      expect(fromWei(await cmk.balanceOf(otherWallet.address))).to.be.closeTo(
-        fromWei(fundAmount.add(totalReward.mul(2).div(3)).sub(debt)),
+      expect(fromWei(await cmk.balanceOf(await otherWallet.getAddress()))).to.be.closeTo(
+        fromWei(fundAmount + (totalReward * (BigInt(2)) / (BigInt(3))) - (debt)),
         1
       );
     });
 
     it('should get proportional rewards by fund amount', async () => {
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(1000); // 1000 CMK ~= $400
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
-      await cmk.connect(admin).transfer(otherWallet.address, fundAmount.mul(2));
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
+      await cmk.connect(admin).transfer(await otherWallet.getAddress(), fundAmount * (BigInt(2)));
 
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
       await cmk
         .connect(otherWallet)
-        .approve(credmarkAccessKey.address, fundAmount.mul(2));
+        .approve(await credmarkAccessKey.getAddress(), fundAmount * (BigInt(2)));
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(1_000), // 1000 USD per month ~= 0.00154 CMK/s
         3600, // 1hour
         true
@@ -911,8 +911,8 @@ describe('Credmark Access Key', () => {
       );
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(1_000), // 1000 USD per month ~= 0.00154 CMK/s
         3600, // 1hour
         true
@@ -926,39 +926,39 @@ describe('Credmark Access Key', () => {
 
       const rewardsPool = (await rewardsPoolFactory
         .connect(admin)
-        .deploy(cmk.address)) as RewardsPool;
+        .deploy(await cmk.getAddress())) as unknown as RewardsPool;
 
-      await cmk.connect(admin).transfer(rewardsPool.address, toWei(10_000_000));
-
-      await rewardsPool
-        .connect(admin)
-        .start(toWei(1).div(BigNumber.from(1000))); // 0.001 CMK per second
+      await cmk.connect(admin).transfer(await rewardsPool.getAddress(), toWei(10_000_000));
 
       await rewardsPool
         .connect(admin)
-        .addRecipient(subscriptionTier1xAddress, BigNumber.from(1));
+        .start(toWei(1) / (BigInt(1000))); // 0.001 CMK per second
 
       await rewardsPool
         .connect(admin)
-        .addRecipient(subscriptionTier2xAddress, BigNumber.from(1));
+        .addRecipient(subscriptionTier1xAddress, BigInt(1));
+
+      await rewardsPool
+        .connect(admin)
+        .addRecipient(subscriptionTier2xAddress, BigInt(1));
 
       const subscriptionTier1x = (await ethers.getContractAt(
         'CredmarkAccessKeySubscriptionTier',
         subscriptionTier1xAddress
-      )) as CredmarkAccessKeySubscriptionTier;
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
       await subscriptionTier1x
         .connect(admin)
-        .setRewardsPool(rewardsPool.address);
+        .setRewardsPool(await rewardsPool.getAddress());
 
       const subscriptionTier2x = (await ethers.getContractAt(
         'CredmarkAccessKeySubscriptionTier',
         subscriptionTier2xAddress
-      )) as CredmarkAccessKeySubscriptionTier;
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
       await subscriptionTier2x
         .connect(admin)
-        .setRewardsPool(rewardsPool.address);
+        .setRewardsPool(await rewardsPool.getAddress());
 
       // Token ID 0
       await credmarkAccessKey.mintSubscribeAndFund(
@@ -969,7 +969,7 @@ describe('Credmark Access Key', () => {
       // Token ID 1
       await credmarkAccessKey
         .connect(otherWallet)
-        .mintSubscribeAndFund(fundAmount.mul(2), subscriptionTier2xAddress);
+        .mintSubscribeAndFund(fundAmount * (BigInt(2)), subscriptionTier2xAddress);
 
       const sevenDays = 7 * 24 * 60 * 60;
 
@@ -977,16 +977,16 @@ describe('Credmark Access Key', () => {
       await ethers.provider.send('evm_mine', []);
 
       // Rewards for seven days ~= 604 CMK
-      const totalReward = BigNumber.from(sevenDays).mul(
-        toWei(1).div(BigNumber.from(1000))
+      const totalReward = BigInt(sevenDays) * (
+        toWei(1) / (BigInt(1000))
       );
 
       // Debt for seven days ~= 933 CMK
-      const debt = toWei(BigNumber.from(1_000))
-        .mul(7)
-        .mul(10000)
-        .div(30)
-        .div(cmkPrice);
+      const debt = toWei(BigInt(1_000))
+         * (BigInt(7))
+         * (BigInt(10000))
+         / (BigInt(30))
+         / (cmkPrice);
 
       expect(fromWei(await credmarkAccessKey.debt(0))).to.be.closeTo(
         fromWei(debt),
@@ -999,34 +999,34 @@ describe('Credmark Access Key', () => {
       );
 
       await credmarkAccessKey.burn(0);
-      expect(fromWei(await cmk.balanceOf(wallet.address))).to.be.closeTo(
-        fromWei(fundAmount.add(totalReward.div(3)).sub(debt)),
+      expect(fromWei(await cmk.balanceOf(await wallet.getAddress()))).to.be.closeTo(
+        fromWei(fundAmount + (totalReward / (BigInt(3))) - (debt)),
         1
       );
 
       await credmarkAccessKey.connect(otherWallet).burn(1);
-      expect(fromWei(await cmk.balanceOf(otherWallet.address))).to.be.closeTo(
-        fromWei(fundAmount.mul(2).add(totalReward.mul(2).div(3)).sub(debt)),
+      expect(fromWei(await cmk.balanceOf(await otherWallet.getAddress()))).to.be.closeTo(
+        fromWei(fundAmount * (BigInt(2)) + (totalReward * (BigInt(2)) / (BigInt(3))) - (debt)),
         1
       );
     });
 
     it('should remove cmk+rewards on resolveDebt', async () => {
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(1000); // 1000 CMK ~= $400
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(1_000), // 1000 USD per month ~= 0.00154 CMK/s
         3600, // 1hour
         true
@@ -1036,23 +1036,23 @@ describe('Credmark Access Key', () => {
       const subscriptionTier = (await ethers.getContractAt(
         'CredmarkAccessKeySubscriptionTier',
         subscriptionTierAddress
-      )) as CredmarkAccessKeySubscriptionTier;
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
       const rewardsPoolFactory = await ethers.getContractFactory('RewardsPool');
       const rewardsPool = (await rewardsPoolFactory
         .connect(admin)
-        .deploy(cmk.address)) as RewardsPool;
+        .deploy(await cmk.getAddress())) as unknown as RewardsPool;
 
-      await cmk.connect(admin).transfer(rewardsPool.address, toWei(10_000_000));
+      await cmk.connect(admin).transfer(await rewardsPool.getAddress(), toWei(10_000_000));
 
       await rewardsPool
         .connect(admin)
-        .start(toWei(1).div(BigNumber.from(1000))); // 0.001 CMK per second
+        .start(toWei(1) / (BigInt(1000))); // 0.001 CMK per second
       await rewardsPool
         .connect(admin)
-        .addRecipient(subscriptionTierAddress, BigNumber.from(1));
+        .addRecipient(subscriptionTierAddress, BigInt(1));
 
-      await subscriptionTier.connect(admin).setRewardsPool(rewardsPool.address);
+      await subscriptionTier.connect(admin).setRewardsPool(await rewardsPool.getAddress());
 
       // Token ID 0
       await credmarkAccessKey.mintSubscribeAndFund(
@@ -1072,28 +1072,28 @@ describe('Credmark Access Key', () => {
       await credmarkAccessKey.resolveDebt(0);
 
       // Rewards for seven days ~= 604 CMK
-      const totalReward = BigNumber.from(sevenDays).mul(
-        toWei(1).div(BigNumber.from(1000))
+      const totalReward = BigInt(sevenDays) * (
+        toWei(1) / (BigInt(1000))
       );
 
       // Debt for seven days ~= 933 CMK
-      const debt = toWei(BigNumber.from(1_000))
-        .mul(7)
-        .mul(10000)
-        .div(30)
-        .div(cmkPrice);
+      const debt = toWei(BigInt(1_000))
+         * (BigInt(7))
+         * (BigInt(10000))
+         / (BigInt(30))
+         / (cmkPrice);
 
       // CMK unstaked to resolve 933 CMK debt ~= 581 CMK
-      const unstakedCmk = debt.mul(fundAmount).div(fundAmount.add(totalReward));
+      const unstakedCmk = debt * (fundAmount) / (fundAmount + (totalReward));
 
       // Updated balance ~= 419 CMK
-      const newBalance = fundAmount.sub(unstakedCmk);
+      const newBalance = fundAmount - (unstakedCmk);
 
       expect(
         fromWei((await credmarkAccessKey.tokenInfo(0)).cmkAmount)
       ).to.be.closeTo(fromWei(newBalance), 1);
 
-      expect(fromWei(await cmk.balanceOf(credmarkDao.address))).to.be.closeTo(
+      expect(fromWei(await cmk.balanceOf(await credmarkDao.getAddress()))).to.be.closeTo(
         fromWei(debt),
         1
       );
@@ -1112,21 +1112,21 @@ describe('Credmark Access Key', () => {
     });
 
     it('should remove cmk+rewards on liquidate', async () => {
-      const cmkPrice = BigNumber.from(2500); // $0.25
+      const cmkPrice = BigInt(2500); // $0.25
       const fundAmount = toWei(1000); // 1000 CMK ~= $400
 
-      await cmk.connect(admin).transfer(wallet.address, fundAmount);
-      await cmk.approve(credmarkAccessKey.address, fundAmount);
+      await cmk.connect(admin).transfer(await wallet.getAddress(), fundAmount);
+      await cmk.approve(await credmarkAccessKey.getAddress(), fundAmount);
 
       const oracleFactory = await ethers.getContractFactory(
         'CredmarkPriceOracleUsd'
       );
-      const oracle = (await oracleFactory.deploy()) as CredmarkPriceOracleUsd;
+      const oracle = (await oracleFactory.deploy()) as unknown as CredmarkPriceOracleUsd;
       await oracle.updateOracle(cmkPrice); // $0.25
 
       await credmarkAccessKey.connect(admin).createSubscriptionTier(
-        admin.address,
-        oracle.address,
+        await admin.getAddress(),
+        await oracle.getAddress(),
         toWei(500_000),
         3600, // 1hour
         true
@@ -1136,22 +1136,22 @@ describe('Credmark Access Key', () => {
       const subscriptionTier = (await ethers.getContractAt(
         'CredmarkAccessKeySubscriptionTier',
         subscriptionTierAddress
-      )) as CredmarkAccessKeySubscriptionTier;
+      )) as unknown as CredmarkAccessKeySubscriptionTier;
 
       const rewardsPoolFactory = await ethers.getContractFactory('RewardsPool');
       const rewardsPool = (await rewardsPoolFactory
         .connect(admin)
-        .deploy(cmk.address)) as RewardsPool;
+        .deploy(await cmk.getAddress())) as unknown as RewardsPool;
 
-      await cmk.connect(admin).transfer(rewardsPool.address, toWei(10_000_000));
+      await cmk.connect(admin).transfer(await rewardsPool.getAddress(), toWei(10_000_000));
 
-      const rewardRate = toWei(1).div(100);
+      const rewardRate = toWei(1) / (BigInt(100));
       await rewardsPool.connect(admin).start(rewardRate); // 0.01 CMK per second
       await rewardsPool
         .connect(admin)
-        .addRecipient(subscriptionTierAddress, BigNumber.from(1));
+        .addRecipient(subscriptionTierAddress, BigInt(1));
 
-      await subscriptionTier.connect(admin).setRewardsPool(rewardsPool.address);
+      await subscriptionTier.connect(admin).setRewardsPool(await rewardsPool.getAddress());
 
       // Token ID 0
       await credmarkAccessKey.mintSubscribeAndFund(
@@ -1167,9 +1167,9 @@ describe('Credmark Access Key', () => {
       await ethers.provider.send('evm_increaseTime', [sevenDays]);
       await ethers.provider.send('evm_mine', []);
 
-      const totalReward = BigNumber.from(sevenDays).mul(2).mul(rewardRate);
+      const totalReward = BigInt(sevenDays) * (BigInt(2)) * (rewardRate);
       const debt = toWei(
-        BigNumber.from(500_000).mul(14).mul(10000).div(30).div(cmkPrice)
+        BigInt(500_000) * (BigInt(14)) * (BigInt(10000)) / (BigInt(30)) / (cmkPrice)
       );
 
       await expect(credmarkAccessKey.resolveDebt(0)).to.be.revertedWith(
@@ -1180,13 +1180,13 @@ describe('Credmark Access Key', () => {
 
       expect((await credmarkAccessKey.tokenInfo(0)).cmkAmount).to.be.equal(0);
 
-      expect(fromWei(await cmk.balanceOf(credmarkDao.address))).to.be.closeTo(
-        fromWei(fundAmount.add(totalReward)),
+      expect(fromWei(await cmk.balanceOf(await credmarkDao.getAddress()))).to.be.closeTo(
+        fromWei(fundAmount + (totalReward)),
         1
       );
 
       expect(fromWei(await credmarkAccessKey.debt(0))).to.be.closeTo(
-        fromWei(debt.sub(totalReward).sub(fundAmount)),
+        fromWei(debt - (totalReward) - (fundAmount)),
         1
       );
     });
