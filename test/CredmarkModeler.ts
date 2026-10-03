@@ -1,8 +1,7 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers';
 import { expect } from 'chai';
-import { BigNumber } from 'ethers';
 import { ethers } from 'hardhat';
-import { CredmarkModel, CredmarkModeler, MockCMK } from '../typechain';
+import { CredmarkModel, CredmarkModeler, MockCMK } from '../typechain-types';
 
 describe('Credmark Modeler', () => {
   let credmarkModeler: CredmarkModeler;
@@ -10,33 +9,33 @@ describe('Credmark Modeler', () => {
   let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
-  const minterRole = ethers.utils.id('MINTER_ROLE');
-  const pauserRole = ethers.utils.id('PAUSER_ROLE');
+  const minterRole = ethers.id('MINTER_ROLE');
+  const pauserRole = ethers.id('PAUSER_ROLE');
 
   let mockCMK: MockCMK;
 
-  const ZERO_ADDRESS = ethers.utils.getAddress(
+  const ZERO_ADDRESS = ethers.getAddress(
     '0x0000000000000000000000000000000000000000'
   );
-  const MINT_COST = BigNumber.from(1);
+  const MINT_COST = BigInt(1);
 
   beforeEach(async () => {
     const credmarkModelFactory = await ethers.getContractFactory(
       'CredmarkModel'
     );
-    credmarkModel = (await credmarkModelFactory.deploy()) as CredmarkModel;
+    credmarkModel = (await credmarkModelFactory.deploy()) as unknown as CredmarkModel;
 
     const mockCMKFactory = await ethers.getContractFactory('MockCMK');
-    mockCMK = (await mockCMKFactory.deploy()) as MockCMK;
+    mockCMK = (await mockCMKFactory.deploy()) as unknown as MockCMK;
 
     const credmarkModelerFactory = await ethers.getContractFactory(
       'CredmarkModeler'
     );
     credmarkModeler = (await credmarkModelerFactory.deploy(
-      credmarkModel.address,
-      mockCMK.address,
+      await credmarkModel.getAddress(),
+      await mockCMK.getAddress(),
       MINT_COST
-    )) as CredmarkModeler;
+    )) as unknown as CredmarkModeler;
 
     [deployer, alice, bob] = await ethers.getSigners();
   });
@@ -45,10 +44,10 @@ describe('Credmark Modeler', () => {
     expect(await credmarkModeler.name()).to.equal('CredmarkModeler');
     expect(await credmarkModeler.symbol()).to.equal('CMKmlr');
     expect(
-      await credmarkModeler.hasRole(minterRole, deployer.address)
+      await credmarkModeler.hasRole(minterRole, await deployer.getAddress())
     ).to.equal(true);
     expect(
-      await credmarkModeler.hasRole(pauserRole, deployer.address)
+      await credmarkModeler.hasRole(pauserRole, await deployer.getAddress())
     ).to.equal(true);
   });
 
@@ -59,7 +58,7 @@ describe('Credmark Modeler', () => {
       expect(await credmarkModeler.paused()).to.equal(true);
 
       // unpuase by pauser
-      await credmarkModeler.grantRole(pauserRole, alice.address);
+      await credmarkModeler.grantRole(pauserRole, await alice.getAddress());
 
       await credmarkModeler.connect(alice).unpause();
       expect(await credmarkModeler.paused()).to.equal(false);
@@ -74,7 +73,7 @@ describe('Credmark Modeler', () => {
   describe('#set model contract', () => {
     it('should be done my admin', async () => {
       await expect(
-        credmarkModeler.connect(alice).setModelContract(credmarkModel.address)
+        credmarkModeler.connect(alice).setModelContract(await credmarkModel.getAddress())
       ).to.be.reverted;
     });
 
@@ -82,10 +81,10 @@ describe('Credmark Modeler', () => {
       await expect(
         credmarkModeler
           .connect(deployer)
-          .setModelContract(credmarkModel.address)
+          .setModelContract(await credmarkModel.getAddress())
       )
         .emit(credmarkModeler, 'ModelContractSet')
-        .withArgs(credmarkModel.address);
+        .withArgs(await credmarkModel.getAddress());
     });
 
     it('should not set if null contract', async () => {
@@ -97,16 +96,16 @@ describe('Credmark Modeler', () => {
 
   describe('#set mint token', () => {
     it('should be done by admin', async () => {
-      await expect(credmarkModeler.connect(alice).setMintToken(mockCMK.address))
+      await expect(credmarkModeler.connect(alice).setMintToken(await mockCMK.getAddress()))
         .to.be.reverted;
     });
 
     it('should set mint token contract', async () => {
       await expect(
-        credmarkModeler.connect(deployer).setMintToken(mockCMK.address)
+        credmarkModeler.connect(deployer).setMintToken(await mockCMK.getAddress())
       )
         .emit(credmarkModeler, 'MintTokenSet')
-        .withArgs(mockCMK.address);
+        .withArgs(await mockCMK.getAddress());
     });
 
     it('should not set if null contract', async () => {
@@ -136,38 +135,38 @@ describe('Credmark Modeler', () => {
   });
 
   describe('#mint', () => {
-    const tokenId = BigNumber.from(0);
+    const tokenId = BigInt(0);
 
     it('should be done by MINTER_ROLE', async () => {
-      await mockCMK.transfer(alice.address, BigNumber.from(100));
+      await mockCMK.transfer(await alice.getAddress(), BigInt(100));
 
       await mockCMK
         .connect(alice)
-        .approve(credmarkModeler.address, BigNumber.from(10));
+        .approve(await credmarkModeler.getAddress(), BigInt(10));
 
-      await expect(credmarkModeler.connect(alice).safeMint(alice.address)).to
+      await expect(credmarkModeler.connect(alice).safeMint(await alice.getAddress())).to
         .reverted;
 
       // grant minter role to normal user
 
       await credmarkModeler
         .connect(deployer)
-        .grantRole(minterRole, alice.address);
+        .grantRole(minterRole, await alice.getAddress());
 
-      await expect(credmarkModeler.connect(alice).safeMint(bob.address))
+      await expect(credmarkModeler.connect(alice).safeMint(await bob.getAddress()))
         .to.emit(credmarkModeler, 'NFTMinted')
         .withArgs(tokenId);
     });
 
     it('should mint nft', async () => {
-      await mockCMK.transfer(deployer.address, BigNumber.from(100));
+      await mockCMK.transfer(await deployer.getAddress(), BigInt(100));
 
       await mockCMK
         .connect(deployer)
-        .approve(credmarkModeler.address, BigNumber.from(10));
+        .approve(await credmarkModeler.getAddress(), BigInt(10));
 
-      await credmarkModeler.connect(deployer).safeMint(alice.address);
-      expect(await credmarkModeler.balanceOf(alice.address)).to.equal(1);
+      await credmarkModeler.connect(deployer).safeMint(await alice.getAddress());
+      expect(await credmarkModeler.balanceOf(await alice.getAddress())).to.equal(1);
     });
   });
 });
