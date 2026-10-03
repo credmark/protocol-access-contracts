@@ -24,7 +24,7 @@
   "homepage": "https://github.com/credmark/protocol-access-contracts#readme",
   "dependencies": {
     "@openzeppelin/contracts": "4.9.6",
-    "@openzeppelin/contracts-upgradeable": "4.7.3",
+    "@openzeppelin/contracts-upgradeable": "4.9.6",
     "@openzeppelin/hardhat-upgrades": "^3.9.1",
     "@openzeppelin/upgrades-core": "^1.46.0"
   },
