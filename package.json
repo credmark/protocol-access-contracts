@@ -45,7 +45,7 @@
     "eslint-config-standard": "^16.0.3",
     "eslint-plugin-import": "^2.25.3",
     "eslint-plugin-prettier": "^4.0.0",
-    "ethereum-waffle": "^3.4.4",
+    "ethereum-waffle": "^4.0.10",
     "ethers": "^5.2.0",
     "hardhat": "^3.18.1",
     "hardhat-gas-reporter": "^1.0.4",
