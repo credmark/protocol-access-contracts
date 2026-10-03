@@ -201,7 +201,7 @@ describe('Credmark Rewards', () => {
           leaf.amount,
           merkleTree.getHexProof(encodeLeaf(leaf))
         )
-      ).to.be.revertedWith('ERC721: owner query for nonexistent token');
+      ).to.be.revertedWith('ERC721: invalid token ID');
     });
 
     it('should fail to claim rewards for wrong amount', async () => {
